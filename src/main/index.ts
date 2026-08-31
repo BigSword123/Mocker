@@ -9,6 +9,7 @@ import { RulesStore } from './storage/rules-store';
 import { SettingsStore } from './storage/settings-store';
 import { disableSystemProxy } from './system-proxy';
 
+// Held as a module-level reference so the window is not garbage-collected.
 let mainWindow: BrowserWindow | null = null;
 let systemProxySetByUs = false;
 let cleaningUp = false;
@@ -60,6 +61,7 @@ async function bootstrap(): Promise<void> {
     rules,
     settings,
     ca,
+    history,
     onSystemProxyChanged: (enabled) => {
       systemProxySetByUs = enabled;
     },
@@ -77,12 +79,14 @@ async function bootstrap(): Promise<void> {
   createWindow();
 
   app.on('before-quit', async (event) => {
-    // Electron does not await async before-quit handlers, so prevent the quit,
-    // run cleanup ourselves, then exit explicitly. The guard makes sure this
-    // runs exactly once even if quit is triggered again mid-cleanup.
+    // Electron does not await async before-quit handlers, so prevent the quit
+    // on every entry (a second Cmd+Q mid-cleanup must not slip through), run
+    // cleanup ourselves, then exit explicitly. The guard keeps cleanup to once.
+    event.preventDefault();
+    // Watchdog: a hung cleanup must not wedge quit forever.
+    setTimeout(() => app.exit(0), 3000);
     if (cleaningUp) return;
     cleaningUp = true;
-    event.preventDefault();
     try {
       // Restoring the OS proxy is highest priority: leaving it pointed at a
       // dead port breaks the user's internet.
@@ -102,4 +106,7 @@ async function bootstrap(): Promise<void> {
   });
 }
 
-app.whenReady().then(bootstrap);
+app.whenReady().then(bootstrap).catch((err) => {
+  dialog.showErrorBox('Mocker 启动失败', String(err));
+  app.exit(1);
+});

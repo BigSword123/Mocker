@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron';
 import { networkInterfaces } from 'node:os';
 import type { ProxyServer } from './proxy/proxy-server';
+import type { HistoryWriter } from './storage/history';
 import type { RulesStore } from './storage/rules-store';
 import type { SettingsStore } from './storage/settings-store';
 import { disableSystemProxy, enableSystemProxy, systemProxyEnabled } from './system-proxy';
@@ -12,6 +13,7 @@ export interface IpcContext {
   rules: RulesStore;
   settings: SettingsStore;
   ca: CaMaterial;
+  history: HistoryWriter;
   onSystemProxyChanged: (enabled: boolean) => void;
 }
 
@@ -25,9 +27,11 @@ export function localIps(): string[] {
 export function registerIpc(ctx: IpcContext): void {
   ipcMain.handle('proxy:start', async () => {
     await ctx.proxy.start();
+    ctx.history.openSession();
   });
   ipcMain.handle('proxy:stop', async () => {
     await ctx.proxy.stop();
+    await ctx.history.closeSession();
   });
   ipcMain.handle('proxy:status', () => ({
     running: ctx.proxy.running,
@@ -46,6 +50,7 @@ export function registerIpc(ctx: IpcContext): void {
   ipcMain.handle('cert:info', () => ({ expiresAt: ctx.ca.notAfter.getTime() }));
 
   ipcMain.handle('system-proxy:set', async (_e, enabled: boolean) => {
+    if (enabled && !ctx.proxy.running) throw new Error('请先启动代理服务');
     if (enabled) {
       await enableSystemProxy(ctx.proxy.port);
     } else {
