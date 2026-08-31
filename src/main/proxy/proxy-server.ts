@@ -1,3 +1,4 @@
+import * as os from 'node:os';
 import * as mockttp from 'mockttp';
 import type { MockRule, Settings, TrafficEvent } from '../../shared/types';
 import { findMatchingRule } from '../rules/engine';
@@ -28,6 +29,8 @@ export interface ProxyServerOptions {
 export class ProxyServer {
   private server?: mockttp.Mockttp;
   private events = new Map<string, TrafficEvent>();
+  private startPromise?: Promise<void>;
+  private proxyHosts: Set<string> = new Set(['localhost', '127.0.0.1']);
 
   constructor(private readonly opts: ProxyServerOptions) {}
 
@@ -41,7 +44,29 @@ export class ProxyServer {
 
   async start(): Promise<void> {
     if (this.server) return;
+    if (this.startPromise) return this.startPromise;
+    const promise = this.doStart();
+    this.startPromise = promise;
+    try {
+      await promise;
+    } finally {
+      this.startPromise = undefined;
+    }
+  }
+
+  private async doStart(): Promise<void> {
     const settings = this.opts.getSettings();
+
+    // Addresses this proxy is actually reachable on: the machine's non-internal
+    // IPv4s plus loopback. The onboarding endpoints must only answer for the
+    // proxy's own hosts, never for arbitrary IPs a client might request.
+    const hosts = new Set<string>(['localhost', '127.0.0.1']);
+    for (const ifaces of Object.values(os.networkInterfaces())) {
+      for (const iface of ifaces ?? []) {
+        if (!iface.internal && iface.family === 'IPv4') hosts.add(iface.address);
+      }
+    }
+    this.proxyHosts = hosts;
 
     const https: mockttp.MockttpHttpsOptions = {
       key: this.opts.caKey,
@@ -159,7 +184,7 @@ export class ProxyServer {
   }
 
   private isProxyHost(hostname: string): boolean {
-    return hostname === 'localhost' || hostname === '127.0.0.1' || /^\d+\.\d+\.\d+\.\d+$/.test(hostname);
+    return this.proxyHosts.has(hostname);
   }
 
   private upsertEvent(req: mockttp.CompletedRequest): TrafficEvent {
@@ -176,15 +201,34 @@ export class ProxyServer {
       mocked: false,
     };
     this.events.set(req.id, event);
-    if (this.events.size > 2000) {
-      const oldest = this.events.keys().next().value;
-      if (oldest) this.events.delete(oldest);
-    }
+    if (this.events.size > 2000) this.evictOldest();
     return event;
   }
 
+  /**
+   * Evicts the oldest *settled* event (completed or errored). Falls back to
+   * the oldest entry of any state only while every tracked event is still
+   * in flight, so normal eviction never drops pending events.
+   */
+  private evictOldest(): void {
+    let fallback: string | undefined;
+    for (const [id, ev] of this.events) {
+      fallback ??= id;
+      if (ev.completedAt !== undefined || ev.error !== undefined) {
+        this.events.delete(id);
+        return;
+      }
+    }
+    if (fallback !== undefined) this.events.delete(fallback);
+  }
+
   private emit(event: TrafficEvent): void {
-    this.opts.onEvent({ ...event });
+    try {
+      this.opts.onEvent({ ...event });
+    } catch {
+      // Capture consumers (WS bridge, history writer) must never be able to
+      // break or 500 real traffic; swallow and keep proxying.
+    }
   }
 }
 

@@ -17,6 +17,7 @@ let upstream: Server;
 let upstreamPort: number;
 let settings: Settings;
 let caPem: string;
+let tmpDir: string;
 
 function rule(pattern: string, body: string): MockRule {
   return {
@@ -30,8 +31,8 @@ function rule(pattern: string, body: string): MockRule {
 }
 
 beforeAll(async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'mocker-proxy-'));
-  const ca = await ensureCa(dir);
+  tmpDir = await mkdtemp(join(tmpdir(), 'mocker-proxy-'));
+  const ca = await ensureCa(tmpDir);
   caPem = ca.certPem;
 
   upstream = createServer((req, res) => {
@@ -44,7 +45,7 @@ beforeAll(async () => {
 
   settings = { ...DEFAULT_SETTINGS, proxyPort: 0, httpsMode: 'whitelist', whitelist: ['mocked.test'] };
   proxy = new ProxyServer({
-    caKey: (await ensureCa(dir)).keyPem,
+    caKey: (await ensureCa(tmpDir)).keyPem,
     caCert: caPem,
     getSettings: () => settings,
     getRules: () => rules,
@@ -56,7 +57,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await proxy.stop();
   upstream.close();
-  await rm(join(tmpdir()), { recursive: false, force: true }).catch(() => {});
+  await rm(tmpDir, { recursive: true, force: true });
 });
 
 beforeEach(() => {
@@ -124,6 +125,29 @@ describe('ProxyServer', () => {
     const ev = events.find((e) => e.mocked)!;
     expect(ev.requestBody).toBe('req-payload');
     expect(ev.method).toBe('POST');
+  });
+
+  it('whitelist matches subdomains', async () => {
+    rules = [rule('https://api.mocked.test/sub', 'sub-mocked')];
+    const agent = new ProxyAgent({
+      uri: `http://127.0.0.1:${proxy.port}`,
+      requestTls: { ca: caPem },
+    });
+    const res = await fetch('https://api.mocked.test/sub', { dispatcher: agent });
+    expect(await res.text()).toBe('sub-mocked');
+  });
+
+  // Keep last: exercises a full stop/restart of the shared proxy instance.
+  it('stop then restart works', async () => {
+    await proxy.stop();
+    expect(proxy.running).toBe(false);
+    await proxy.start();
+    expect(proxy.running).toBe(true);
+
+    rules = [rule('http://api.example.test/ping', 'restarted-body')];
+    const agent = new ProxyAgent(`http://127.0.0.1:${proxy.port}`);
+    const res = await fetch('http://api.example.test/ping', { dispatcher: agent });
+    expect(await res.text()).toBe('restarted-body');
   });
 });
 
