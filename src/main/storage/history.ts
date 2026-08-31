@@ -11,9 +11,17 @@ export class HistoryWriter {
   ) {}
 
   openSession(): void {
+    if (this.stream) {
+      const old = this.stream;
+      old.on('error', () => {});
+      old.end();
+    }
     fs.mkdirSync(this.dir, { recursive: true });
     const file = path.join(this.dir, `session-${Date.now()}.jsonl`);
     this.stream = fs.createWriteStream(file, { flags: 'a' });
+    this.stream.on('error', () => {
+      this.stream = null;
+    });
   }
 
   write(event: TrafficEvent): void {
@@ -21,11 +29,13 @@ export class HistoryWriter {
     this.stream.write(JSON.stringify(event) + '\n');
   }
 
-  closeSession(): Promise<void> {
-    if (!this.stream) return Promise.resolve();
-    return new Promise<void>((resolve) => {
-      this.stream!.end(() => resolve());
-      this.stream = null;
+  async closeSession(): Promise<void> {
+    const stream = this.stream;
+    this.stream = null;
+    if (!stream) return;
+    await new Promise<void>((resolve) => {
+      stream.once('error', () => resolve());
+      stream.end(() => resolve());
     });
   }
 

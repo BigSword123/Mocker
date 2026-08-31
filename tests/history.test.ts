@@ -47,12 +47,27 @@ describe('HistoryWriter', () => {
   it('prunes old sessions beyond the limit', async () => {
     const writer = new HistoryWriter(dir, 2);
     for (let i = 0; i < 3; i++) {
+      await new Promise((r) => setTimeout(r, 5));
       writer.openSession();
       writer.write(event(`e${i}`));
-      writer.closeSession();
+      await writer.closeSession();
     }
     await writer.prune();
     const files = await readdir(dir);
-    expect(files.length).toBeLessThanOrEqual(2);
+    expect(files).toHaveLength(2);
+  });
+
+  it('opening a second session while one is open does not throw and keeps writing to the newest file', async () => {
+    const writer = new HistoryWriter(dir);
+    writer.openSession();
+    writer.write(event('e1'));
+    await new Promise((r) => setTimeout(r, 5));
+    expect(() => writer.openSession()).not.toThrow();
+    writer.write(event('e2'));
+    await writer.closeSession();
+    const files = (await readdir(dir)).sort();
+    expect(files).toHaveLength(2);
+    const newer = (await readFile(join(dir, files[1]), 'utf8')).trim().split('\n');
+    expect(newer.map((l) => JSON.parse(l).id)).toEqual(['e2']);
   });
 });
