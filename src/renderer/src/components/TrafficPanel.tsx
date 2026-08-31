@@ -1,16 +1,20 @@
 import { useMemo, useState } from 'react';
-import type { TrafficEvent } from '../../../shared/types';
 import { useTrafficStore } from '../stores/traffic';
 import TrafficDetail from './TrafficDetail';
 import TrafficTable from './TrafficTable';
 
 export default function TrafficPanel() {
   const { list, filter, paused, setFilter, togglePause, clear } = useTrafficStore();
-  const [selected, setSelected] = useState<TrafficEvent | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const filtered = useMemo(
     () => (filter ? list.filter((e) => e.url.includes(filter)) : list),
     [list, filter],
+  );
+
+  const selected = useMemo(
+    () => list.find((e) => e.id === selectedId) ?? null,
+    [list, selectedId],
   );
 
   return (
@@ -18,11 +22,11 @@ export default function TrafficPanel() {
       <div className="toolbar">
         <input placeholder="过滤 URL…" value={filter} onChange={(e) => setFilter(e.target.value)} />
         <button onClick={togglePause}>{paused ? '继续' : '暂停'}</button>
-        <button onClick={() => { clear(); setSelected(null); }}>清空</button>
+        <button onClick={() => { clear(); setSelectedId(null); }}>清空</button>
         <span className="muted">{filtered.length} 条</span>
       </div>
       <div className="split">
-        <TrafficTable events={filtered} selectedId={selected?.id ?? null} onSelect={setSelected} />
+        <TrafficTable events={filtered} selectedId={selectedId} onSelect={(e) => setSelectedId(e.id)} />
         <TrafficDetail event={selected} />
       </div>
     </div>

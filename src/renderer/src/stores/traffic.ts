@@ -15,6 +15,7 @@ interface TrafficState {
 }
 
 let ws: WebSocket | null = null;
+let retryTimer: ReturnType<typeof setTimeout> | null = null;
 let pending: TrafficEvent[] = [];
 
 function upsert(list: TrafficEvent[], event: TrafficEvent): TrafficEvent[] {
@@ -37,29 +38,40 @@ export const useTrafficStore = create<TrafficState>((set, get) => ({
     set({ list: [] });
   },
   connect: (wsPort) => {
+    if (retryTimer) {
+      clearTimeout(retryTimer);
+      retryTimer = null;
+    }
     if (ws) return;
     const open = () => {
+      retryTimer = null;
       ws = new WebSocket(`ws://127.0.0.1:${wsPort}`);
       ws.onopen = () => set({ connected: true });
       ws.onclose = () => {
         ws = null;
         set({ connected: false });
-        setTimeout(open, 2000);
+        retryTimer = setTimeout(open, 2000);
       };
       ws.onmessage = (msg) => {
-        const data = JSON.parse(msg.data);
+        let data: { type: string; events?: TrafficEvent[]; event?: TrafficEvent };
+        try {
+          data = JSON.parse(msg.data);
+        } catch {
+          return;
+        }
         if (data.type === 'snapshot') {
-          set({ list: data.events.slice(-MAX_EVENTS) });
+          set({ list: data.events!.slice(-MAX_EVENTS) });
           pending = [];
         } else if (data.type === 'event') {
           if (get().paused) {
-            pending.push(data.event);
+            pending.push(data.event!);
+            if (pending.length > MAX_EVENTS) pending.shift();
             return;
           }
           let list = get().list;
           for (const p of pending) list = upsert(list, p);
           pending = [];
-          set({ list: upsert(list, data.event) });
+          set({ list: upsert(list, data.event!) });
         }
       };
     };

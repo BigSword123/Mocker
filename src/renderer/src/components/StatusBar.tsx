@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ProxyStatus } from '../../../shared/types';
 import { api } from '../lib/api';
 import { useTrafficStore } from '../stores/traffic';
@@ -6,9 +6,18 @@ import { useTrafficStore } from '../stores/traffic';
 export default function StatusBar() {
   const [status, setStatus] = useState<ProxyStatus | null>(null);
   const connected = useTrafficStore((s) => s.connected);
+  const refreshing = useRef(false);
 
   const refresh = useCallback(async () => {
-    setStatus(await api.proxyStatus());
+    if (refreshing.current) return;
+    refreshing.current = true;
+    try {
+      setStatus(await api.proxyStatus());
+    } catch {
+      // keep last known status
+    } finally {
+      refreshing.current = false;
+    }
   }, []);
 
   useEffect(() => {
@@ -18,9 +27,13 @@ export default function StatusBar() {
   }, [refresh]);
 
   const toggle = async () => {
-    if (status?.running) await api.proxyStop();
-    else await api.proxyStart();
-    await refresh();
+    try {
+      if (status?.running) await api.proxyStop();
+      else await api.proxyStart();
+      await refresh();
+    } catch {
+      // ignore; next refresh will recover the status
+    }
   };
 
   return (

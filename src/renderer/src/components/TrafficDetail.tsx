@@ -2,6 +2,9 @@ import type { TrafficEvent } from '../../../shared/types';
 
 function pretty(body: string | undefined): string {
   if (!body) return '';
+  if (body.length > 500_000) {
+    return body.slice(0, 500_000) + '\n…（内容过长已截断）';
+  }
   try {
     return JSON.stringify(JSON.parse(body), null, 2);
   } catch {
