@@ -40,4 +40,18 @@ describe('JsonStore', () => {
     const original = await readFile(file, 'utf8').catch(() => null);
     expect(original).toBeNull();
   });
+
+  it('stores and reads arrays', async () => {
+    const store = new JsonStore<string[]>(join(dir, 'x.json'), []);
+    await store.write(['a', 'b']);
+    expect(await store.read()).toEqual(['a', 'b']);
+  });
+
+  it('serializes concurrent writes', async () => {
+    const file = join(dir, 'x.json');
+    const store = new JsonStore<{ n: number }>(file, { n: -1 });
+    await Promise.all([0, 1, 2, 3, 4].map((n) => store.write({ n })));
+    expect(await store.read()).toEqual({ n: 4 });
+    expect(JSON.parse(await readFile(file, 'utf8'))).toEqual({ n: 4 });
+  });
 });
