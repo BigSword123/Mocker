@@ -11,6 +11,12 @@ test.beforeAll(async () => {
 });
 
 test.afterAll(async () => {
+  // 只清理本测试创建的规则，避免误删开发者的真实规则
+  await win.evaluate(async () => {
+    for (const r of await window.api.rulesList()) {
+      if (r.name === 'e2e-rule') await window.api.rulesRemove(r.id);
+    }
+  });
   await app.close();
 });
 
@@ -38,16 +44,13 @@ test('app boots and mocks a request end-to-end', async () => {
   // 经代理发请求，断言 mock 生效
   const agent = new ProxyAgent(`http://127.0.0.1:${status.port}`);
   const res = await fetch('http://e2e.example.test/ping', { dispatcher: agent });
+  expect(res.status).toBe(200);
   expect(await res.text()).toBe('e2e-mocked');
+  await agent.close();
 
   // 流量表中出现该请求（轮询等待）
   await expect(async () => {
     const text = await win.locator('.traffic-table').innerText();
     expect(text).toContain('e2e.example.test');
   }).toPass({ timeout: 10000 });
-
-  // 清理规则，避免污染下次运行
-  await win.evaluate(async () => {
-    for (const r of await window.api.rulesList()) await window.api.rulesRemove(r.id);
-  });
 });
