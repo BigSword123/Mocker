@@ -6,6 +6,18 @@ import { JsonStore } from './json-store';
 
 const MAX_SNAPSHOTS = 50;
 
+function cloneRule(rule: MockRule): MockRule {
+  return {
+    ...rule,
+    match: {
+      ...rule.match,
+      ...(rule.match.query ? { query: { ...rule.match.query } } : {}),
+      ...(rule.match.headers ? { headers: { ...rule.match.headers } } : {}),
+    },
+    action: { ...rule.action, headers: { ...rule.action.headers } },
+  };
+}
+
 export class RulesStore {
   private rules: MockRule[] = [];
   private readonly store: JsonStore<MockRule[]>;
@@ -22,7 +34,7 @@ export class RulesStore {
   }
 
   list(): MockRule[] {
-    return [...this.rules].sort((a, b) => a.priority - b.priority);
+    return [...this.rules].sort((a, b) => a.priority - b.priority).map((r) => cloneRule(r));
   }
 
   onChange(fn: () => void): () => void {
@@ -51,13 +63,19 @@ export class RulesStore {
   }
 
   private nextPriority(): number {
-    return this.rules.length === 0 ? 1 : Math.max(...this.rules.map((r) => r.priority)) + 1;
+    return this.rules.reduce((m, r) => Math.max(m, r.priority), 0) + 1;
   }
 
   private async persist(): Promise<void> {
     await this.store.write(this.rules);
     await this.snapshot();
-    for (const fn of this.listeners) fn();
+    for (const fn of this.listeners) {
+      try {
+        fn();
+      } catch {
+        // ignore listener errors so one bad listener cannot block others or the mutation
+      }
+    }
   }
 
   private async snapshot(): Promise<void> {

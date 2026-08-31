@@ -77,4 +77,53 @@ describe('RulesStore', () => {
     await store.add(input('a'));
     expect(calls).toBe(1);
   });
+
+  it('prunes snapshots beyond the limit', async () => {
+    const store = new RulesStore(dir);
+    await store.load();
+    const a = await store.add(input('a'));
+    for (let i = 0; i < 54; i++) {
+      await store.update(a.id, { name: `x${i}` });
+    }
+    const snapshots = await readdir(join(dir, 'snapshots'));
+    expect(snapshots.length).toBeLessThanOrEqual(50);
+  });
+
+  it('a throwing listener does not break other listeners or persist', async () => {
+    const store = new RulesStore(dir);
+    await store.load();
+    let bCalls = 0;
+    store.onChange(() => {
+      throw new Error('listener boom');
+    });
+    store.onChange(() => bCalls++);
+    await expect(store.add(input('a'))).resolves.toBeTruthy();
+    expect(bCalls).toBe(1);
+  });
+
+  it('update of unknown id rejects', async () => {
+    const store = new RulesStore(dir);
+    await store.load();
+    await expect(store.update('nope', {})).rejects.toThrow('rule not found');
+  });
+
+  it('remove of unknown id is a no-op', async () => {
+    const store = new RulesStore(dir);
+    await store.load();
+    await store.add(input('a'));
+    await expect(store.remove('nope')).resolves.toBeUndefined();
+    expect(store.list().map((r) => r.name)).toEqual(['a']);
+  });
+
+  it('priorities stay unique after removes', async () => {
+    const store = new RulesStore(dir);
+    await store.load();
+    await store.add(input('a'));
+    const b = await store.add(input('b'));
+    await store.add(input('c'));
+    await store.remove(b.id);
+    await store.add(input('d'));
+    const priorities = store.list().map((r) => r.priority);
+    expect(new Set(priorities).size).toBe(priorities.length);
+  });
 });
