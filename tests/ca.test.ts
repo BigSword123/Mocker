@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile, mkdir, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import forge from 'node-forge';
@@ -45,5 +45,16 @@ describe('ensureCa', () => {
     await writeFile(join(dir, 'certs', 'ca.key'), 'garbage');
     const ca = await ensureCa(dir);
     expect(() => forge.pki.certificateFromPem(ca.certPem)).not.toThrow();
+  });
+
+  it('writes key file with 0o600 permissions', async () => {
+    await ensureCa(dir);
+    const st = await stat(join(dir, 'certs', 'ca.key'));
+    expect(st.mode & 0o777).toBe(0o600);
+    // 续期路径会重新写文件，权限仍需保持 0o600
+    const future = new Date(Date.now() + 9.5 * 365 * 24 * 3600 * 1000);
+    await ensureCa(dir, future);
+    const st2 = await stat(join(dir, 'certs', 'ca.key'));
+    expect(st2.mode & 0o777).toBe(0o600);
   });
 });

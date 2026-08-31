@@ -27,11 +27,13 @@ export async function ensureCa(dataDir: string, now: Date = new Date()): Promise
     // 缺失或损坏：重新生成
   }
   const generated = generateCa(now);
-  await fs.mkdir(path.dirname(certPath), { recursive: true });
+  await fs.mkdir(path.dirname(certPath), { recursive: true, mode: 0o700 });
+  await fs.chmod(path.dirname(certPath), 0o700);
   await Promise.all([
     fs.writeFile(certPath, generated.certPem, 'utf8'),
     fs.writeFile(keyPath, generated.keyPem, { encoding: 'utf8', mode: 0o600 }),
   ]);
+  await fs.chmod(keyPath, 0o600);
   return generated;
 }
 
