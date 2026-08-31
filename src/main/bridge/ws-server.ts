@@ -1,4 +1,5 @@
 import { WebSocket, WebSocketServer } from 'ws';
+import type { AddressInfo } from 'node:net';
 import type { TrafficEvent } from '../../shared/types';
 
 const SNAPSHOT_LIMIT = 500;
@@ -7,15 +8,39 @@ export class Bridge {
   private wss?: WebSocketServer;
   private clients = new Set<WebSocket>();
   private recent: TrafficEvent[] = [];
+  private boundPort?: number;
 
-  async start(port: number): Promise<void> {
-    this.wss = new WebSocketServer({ port, host: '127.0.0.1' });
-    this.wss.on('connection', (ws) => {
+  get port(): number | undefined {
+    return this.boundPort;
+  }
+
+  async start(port: number): Promise<number> {
+    if (this.wss) throw new Error('Bridge already started');
+    const wss = new WebSocketServer({ port, host: '127.0.0.1' });
+    this.wss = wss;
+    // The http server forwards errors (e.g. EADDRINUSE) onto the WSS; an unhandled
+    // 'error' on an EventEmitter throws and crashes the Electron main process.
+    wss.on('error', () => {});
+    wss.on('connection', (ws) => {
       this.clients.add(ws);
+      ws.on('error', () => {});
       ws.send(JSON.stringify({ type: 'snapshot', events: this.recent }));
       ws.on('close', () => this.clients.delete(ws));
     });
-    await new Promise<void>((resolve) => this.wss!.once('listening', resolve));
+    try {
+      await new Promise<void>((resolve, reject) => {
+        wss.once('listening', () => {
+          wss.removeListener('error', reject);
+          resolve();
+        });
+        wss.once('error', reject);
+      });
+    } catch (err) {
+      this.wss = undefined;
+      throw err;
+    }
+    this.boundPort = (wss.address() as AddressInfo).port;
+    return this.boundPort;
   }
 
   publish(event: TrafficEvent): void {
@@ -40,5 +65,6 @@ export class Bridge {
       this.wss.close(() => resolve());
     });
     this.wss = undefined;
+    this.boundPort = undefined;
   }
 }

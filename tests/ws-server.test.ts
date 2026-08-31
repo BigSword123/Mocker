@@ -4,9 +4,9 @@ import { Bridge } from '../src/main/bridge/ws-server';
 import type { TrafficEvent } from '../src/shared/types';
 
 let bridge: Bridge;
-const PORT = 18899;
+let PORT: number;
 
-const event = (id: string): TrafficEvent => ({
+const event = (id: string, mocked = false): TrafficEvent => ({
   id,
   startedAt: Date.now(),
   method: 'GET',
@@ -14,7 +14,7 @@ const event = (id: string): TrafficEvent => ({
   host: 'x.com',
   path: '/',
   requestHeaders: {},
-  mocked: false,
+  mocked,
 });
 
 function connect(): Promise<{ ws: WebSocket; messages: unknown[] }> {
@@ -29,7 +29,7 @@ function connect(): Promise<{ ws: WebSocket; messages: unknown[] }> {
 
 beforeAll(async () => {
   bridge = new Bridge();
-  await bridge.start(PORT);
+  PORT = await bridge.start(0);
 });
 
 afterAll(async () => {
@@ -54,7 +54,20 @@ describe('Bridge', () => {
     const { ws, messages } = await connect();
     await waitUntil(() => messages.length >= 1);
     const snapshot = messages[0] as { events: TrafficEvent[] };
-    expect(snapshot.events.length).toBeLessThanOrEqual(500);
+    expect(snapshot.events.length).toBe(500);
+    expect(snapshot.events[0].id).toBe('bulk-100');
+    ws.close();
+  });
+
+  it('upserts an event by id', async () => {
+    bridge.publish(event('x'));
+    bridge.publish(event('x', true));
+    const { ws, messages } = await connect();
+    await waitUntil(() => messages.length >= 1);
+    const snapshot = messages[0] as { events: TrafficEvent[] };
+    const xs = snapshot.events.filter((e) => e.id === 'x');
+    expect(xs).toHaveLength(1);
+    expect(xs[0].mocked).toBe(true);
     ws.close();
   });
 });
