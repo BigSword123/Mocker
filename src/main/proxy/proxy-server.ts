@@ -232,10 +232,6 @@ export class ProxyServer {
   }
 }
 
-export function isWhitelisted(whitelist: string[], host: string): boolean {
-  return whitelist.some((d) => host === d || host.endsWith(`.${d}`));
-}
-
 function toCallbackResponse(res: OnboardingResponse): mockttp.requestSteps.CallbackResponseResult {
   return { statusCode: res.statusCode, headers: res.headers, body: res.body };
 }

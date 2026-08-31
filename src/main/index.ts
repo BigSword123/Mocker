@@ -68,6 +68,7 @@ async function bootstrap(): Promise<void> {
     settings,
     ca,
     history,
+    systemProxySetByUs: () => systemProxySetByUs,
     onSystemProxyChanged: (enabled) => {
       systemProxySetByUs = enabled;
     },
@@ -77,6 +78,8 @@ async function bootstrap(): Promise<void> {
     try {
       await proxy.start();
       history.openSession();
+      // Best-effort cleanup of stale session files; never fail start over it.
+      await history.prune().catch(() => {});
     } catch (err) {
       dialog.showErrorBox('代理启动失败', String(err));
     }

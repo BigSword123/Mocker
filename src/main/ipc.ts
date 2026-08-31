@@ -14,6 +14,7 @@ export interface IpcContext {
   settings: SettingsStore;
   ca: CaMaterial;
   history: HistoryWriter;
+  systemProxySetByUs: () => boolean;
   onSystemProxyChanged: (enabled: boolean) => void;
 }
 
@@ -28,8 +29,20 @@ export function registerIpc(ctx: IpcContext): void {
   ipcMain.handle('proxy:start', async () => {
     await ctx.proxy.start();
     ctx.history.openSession();
+    // Best-effort cleanup of stale session files; never fail start over it.
+    await ctx.history.prune().catch(() => {});
   });
   ipcMain.handle('proxy:stop', async () => {
+    // Restore the OS proxy first while the proxy still serves, so traffic is
+    // never routed at a dead port. Only our own setting is ours to undo.
+    if (ctx.systemProxySetByUs()) {
+      try {
+        await disableSystemProxy();
+      } catch {
+        // 尽力恢复，失败不阻塞停止流程
+      }
+      ctx.onSystemProxyChanged(false);
+    }
     await ctx.proxy.stop();
     await ctx.history.closeSession();
   });
