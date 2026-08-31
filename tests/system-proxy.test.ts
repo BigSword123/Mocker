@@ -15,6 +15,28 @@ describe('parseServiceOrder', () => {
       { service: 'Thunderbolt 桥接', device: 'bridge0' },
     ]);
   });
+
+  it('skips disabled services', () => {
+    const withDisabled = `An asterisk (*) denotes that a network service is disabled.
+(1) Wi-Fi
+(Hardware Port: Wi-Fi, Device: en0)
+(*) Some VPN
+(Hardware Port: Some VPN, Device: utun3)
+(2) Thunderbolt 桥接
+(Hardware Port: Thunderbolt Bridge, Device: bridge0)
+`;
+    expect(parseServiceOrder(withDisabled)).toEqual([
+      { service: 'Wi-Fi', device: 'en0' },
+      { service: 'Thunderbolt 桥接', device: 'bridge0' },
+    ]);
+  });
+
+  it('handles CRLF line endings', () => {
+    expect(parseServiceOrder(sample.replace(/\n/g, '\r\n'))).toEqual([
+      { service: 'Wi-Fi', device: 'en0' },
+      { service: 'Thunderbolt 桥接', device: 'bridge0' },
+    ]);
+  });
 });
 
 describe('parseDefaultInterface', () => {

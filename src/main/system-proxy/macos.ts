@@ -10,7 +10,7 @@ export interface NetworkService {
 
 export function parseServiceOrder(output: string): NetworkService[] {
   const services: NetworkService[] = [];
-  const lines = output.split('\n');
+  const lines = output.split(/\r?\n/);
   for (let i = 0; i < lines.length; i++) {
     const name = lines[i].match(/^\(\d+\)\s+(.+)$/);
     if (name && lines[i + 1]) {
@@ -27,8 +27,8 @@ export function parseDefaultInterface(routeOutput: string): string | undefined {
 
 export async function activeService(): Promise<string | undefined> {
   const [{ stdout: routeOut }, { stdout: orderOut }] = await Promise.all([
-    run('route', ['-n', 'get', 'default']).catch(() => ({ stdout: '' })),
-    run('networksetup', ['-listnetworkserviceorder']),
+    run('route', ['-n', 'get', 'default'], { timeout: 5000 }).catch(() => ({ stdout: '' })),
+    run('networksetup', ['-listnetworkserviceorder'], { timeout: 5000 }).catch(() => ({ stdout: '' })),
   ]);
   const device = parseDefaultInterface(routeOut);
   if (!device) return undefined;
@@ -38,20 +38,35 @@ export async function activeService(): Promise<string | undefined> {
 export async function enable(port: number): Promise<void> {
   const service = await activeService();
   if (!service) throw new Error('找不到活跃的网络服务');
-  await run('networksetup', ['-setwebproxy', service, '127.0.0.1', String(port)]);
-  await run('networksetup', ['-setsecurewebproxy', service, '127.0.0.1', String(port)]);
+  await run('networksetup', ['-setwebproxy', service, '127.0.0.1', String(port)], { timeout: 5000 });
+  try {
+    await run('networksetup', ['-setsecurewebproxy', service, '127.0.0.1', String(port)], { timeout: 5000 });
+  } catch (err) {
+    await run('networksetup', ['-setwebproxystate', service, 'off'], { timeout: 5000 }).catch(() => {});
+    throw err;
+  }
 }
 
 export async function disable(): Promise<void> {
-  const service = await activeService();
-  if (!service) return;
-  await run('networksetup', ['-setwebproxystate', service, 'off']);
-  await run('networksetup', ['-setsecurewebproxystate', service, 'off']);
+  // Cleanup must not depend on the (possibly already disrupted) default route:
+  // turn the proxy off on every service, ignoring per-service failures.
+  const { stdout: orderOut } = await run('networksetup', ['-listnetworkserviceorder'], { timeout: 5000 });
+  for (const { service } of parseServiceOrder(orderOut)) {
+    try {
+      await run('networksetup', ['-setwebproxystate', service, 'off'], { timeout: 5000 });
+      await run('networksetup', ['-setsecurewebproxystate', service, 'off'], { timeout: 5000 });
+    } catch {
+      /* keep going */
+    }
+  }
 }
 
 export async function isEnabled(): Promise<boolean> {
   const service = await activeService();
   if (!service) return false;
-  const { stdout } = await run('networksetup', ['-getwebproxy', service]);
-  return /Enabled:\s*Yes/i.test(stdout);
+  const [{ stdout: web }, { stdout: secure }] = await Promise.all([
+    run('networksetup', ['-getwebproxy', service], { timeout: 5000 }),
+    run('networksetup', ['-getsecurewebproxy', service], { timeout: 5000 }),
+  ]);
+  return /Enabled:\s*Yes/i.test(web) && /Enabled:\s*Yes/i.test(secure);
 }
