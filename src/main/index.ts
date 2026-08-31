@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog } from 'electron';
+import { app, BrowserWindow, dialog, shell } from 'electron';
 import { join } from 'node:path';
 import { Bridge } from './bridge/ws-server';
 import { ensureCa } from './certs/ca';
@@ -24,6 +24,12 @@ function createWindow(): void {
       nodeIntegration: false,
       sandbox: true,
     },
+  });
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//.test(url)) {
+      shell.openExternal(url);
+    }
+    return { action: 'deny' };
   });
   if (process.env['ELECTRON_RENDERER_URL']) {
     mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL']);

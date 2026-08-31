@@ -45,7 +45,14 @@ export function registerIpc(ctx: IpcContext): void {
   ipcMain.handle('rules:remove', (_e, id: string) => ctx.rules.remove(id));
 
   ipcMain.handle('settings:get', () => ctx.settings.get());
-  ipcMain.handle('settings:set', (_e, patch: Partial<Settings>) => ctx.settings.set(patch));
+  ipcMain.handle('settings:set', (_e, patch: Partial<Settings>) => {
+    if (patch.proxyPort !== undefined) {
+      if (!Number.isInteger(patch.proxyPort) || patch.proxyPort < 1 || patch.proxyPort > 65535) {
+        throw new Error('代理端口必须是 1-65535 的整数');
+      }
+    }
+    return ctx.settings.set(patch);
+  });
 
   ipcMain.handle('cert:info', () => ({ expiresAt: ctx.ca.notAfter.getTime() }));
 
