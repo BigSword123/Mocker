@@ -45,6 +45,19 @@ describe('matchRule', () => {
     expect(matchRule({ ...m, query: { page: '3' } }, req())).toBe(false);
   });
 
+  it('matches repeated query keys when any value equals', () => {
+    const url = 'http://x.com/?tag=b&tag=a';
+    const r = req({ url, query: new URL(url).searchParams });
+    const m: RuleMatch = { ...base, urlPattern: url, query: { tag: 'a' } };
+    expect(matchRule(m, r)).toBe(true);
+    expect(matchRule({ ...m, query: { tag: 'c' } }, r)).toBe(false);
+  });
+
+  it('treats wildcard special characters literally', () => {
+    const m: RuleMatch = { ...base, urlType: 'wildcard', urlPattern: 'http://api.example.com/users.json' };
+    expect(matchRule(m, req({ url: 'http://api.example.com/usersXjson' }))).toBe(false);
+  });
+
   it('matches headers case-insensitively by name', () => {
     const m: RuleMatch = { ...base, headers: { 'X-Token': 'abc' } };
     expect(matchRule(m, req())).toBe(true);

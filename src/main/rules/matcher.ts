@@ -18,18 +18,31 @@ export function matchRule(match: RuleMatch, req: RequestDescription): boolean {
   );
 }
 
+const regexCache = new Map<string, RegExp | null>();
+
+function getCachedRegex(pattern: string): RegExp | null {
+  if (!regexCache.has(pattern)) {
+    try {
+      regexCache.set(pattern, new RegExp(pattern));
+    } catch {
+      regexCache.set(pattern, null);
+    }
+  }
+  return regexCache.get(pattern) ?? null;
+}
+
 function matchUrl(match: RuleMatch, url: string): boolean {
   switch (match.urlType) {
     case 'exact':
       return url === match.urlPattern;
     case 'wildcard':
       return wildcardToRegExp(match.urlPattern).test(url);
-    case 'regex':
-      try {
-        return new RegExp(match.urlPattern).test(url);
-      } catch {
-        return false;
-      }
+    case 'regex': {
+      const re = getCachedRegex(match.urlPattern);
+      return re ? re.test(url) : false;
+    }
+    default:
+      return false;
   }
 }
 
@@ -44,7 +57,7 @@ function matchMethod(ruleMethod: string, actual: string): boolean {
 
 function matchQuery(expected: Record<string, string> | undefined, query: URLSearchParams): boolean {
   if (!expected) return true;
-  return Object.entries(expected).every(([k, v]) => query.get(k) === v);
+  return Object.entries(expected).every(([k, v]) => query.getAll(k).includes(v));
 }
 
 function matchHeaders(expected: Record<string, string> | undefined, headers: Record<string, string>): boolean {
