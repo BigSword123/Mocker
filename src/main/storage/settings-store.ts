@@ -16,7 +16,7 @@ export class SettingsStore {
   }
 
   get(): Settings {
-    return { ...this.settings };
+    return { ...this.settings, whitelist: [...this.settings.whitelist] };
   }
 
   onChange(fn: () => void): () => void {
@@ -27,7 +27,13 @@ export class SettingsStore {
   async set(patch: Partial<Settings>): Promise<Settings> {
     this.settings = { ...this.settings, ...patch };
     await this.store.write(this.settings);
-    for (const fn of this.listeners) fn();
+    for (const fn of this.listeners) {
+      try {
+        fn();
+      } catch {
+        // ignore listener errors so one bad listener cannot block others or the mutation
+      }
+    }
     return this.get();
   }
 }
