@@ -44,6 +44,8 @@ export default function RuleEditorModal({ initial, onClose, onSaved }: Props) {
   const [error, setError] = useState('');
 
   const save = async () => {
+    const query = parseLines(queryText, '=');
+    const headers = parseLines(headersText, ': ');
     const input: RuleInput = {
       name: name.trim() || urlPattern,
       enabled: initial?.enabled ?? true,
@@ -51,8 +53,8 @@ export default function RuleEditorModal({ initial, onClose, onSaved }: Props) {
         urlType,
         urlPattern,
         method,
-        query: Object.keys(parseLines(queryText, '=')).length ? parseLines(queryText, '=') : undefined,
-        headers: Object.keys(parseLines(headersText, ': ')).length ? parseLines(headersText, ': ') : undefined,
+        query: Object.keys(query).length ? query : undefined,
+        headers: Object.keys(headers).length ? headers : undefined,
         bodyContains: bodyContains || undefined,
       },
       action: {
@@ -63,6 +65,10 @@ export default function RuleEditorModal({ initial, onClose, onSaved }: Props) {
     };
     if (!urlPattern) {
       setError('URL 匹配模式不能为空');
+      return;
+    }
+    if (!(Number.isInteger(status) && status >= 100 && status <= 999)) {
+      setError('响应状态码必须是 100-999 的整数');
       return;
     }
     try {

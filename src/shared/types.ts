@@ -26,7 +26,7 @@ export interface MockRule {
 }
 
 export type RuleInput = Omit<MockRule, 'id' | 'priority'>;
-export type RulePatch = Partial<Omit<MockRule, 'id' | 'priority'>>;
+export type RulePatch = Partial<Omit<MockRule, 'id'>>;
 
 export interface TrafficEvent {
   id: string;

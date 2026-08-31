@@ -1,14 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { MockRule, RulePatch } from '../../../shared/types';
+import type { MockRule } from '../../../shared/types';
 import { api } from '../lib/api';
 import RuleEditorModal from './RuleEditorModal';
-
-// RulePatch intentionally excludes `priority` from the public update contract,
-// but the main-process RulesStore applies any patched field as-is, so a priority
-// patch is safe for reordering. Keep the escape hatch local to this panel.
-function priorityPatch(priority: number): RulePatch {
-  return { priority } as unknown as RulePatch;
-}
 
 export default function RulesPanel() {
   const [rules, setRules] = useState<MockRule[]>([]);
@@ -32,8 +25,8 @@ export default function RulesPanel() {
     const other = rules[idx + dir];
     if (!other) return;
     try {
-      await api.rulesUpdate(rule.id, priorityPatch(other.priority));
-      await api.rulesUpdate(other.id, priorityPatch(rule.priority));
+      await api.rulesUpdate(rule.id, { priority: other.priority });
+      await api.rulesUpdate(other.id, { priority: rule.priority });
       await refresh();
     } catch {
       await refresh();
