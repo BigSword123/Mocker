@@ -35,6 +35,17 @@ export default function TrafficDetail({ event }: { event: TrafficEvent | null })
       <h3>{event.method} {event.url}</h3>
       {event.error && <div className="text-err">错误：{event.error}</div>}
       {event.mocked && <div className="text-ok">由规则命中（{event.matchedRuleId}）</div>}
+      {event.errorTriggered && <div className="text-warn">本次命中网络异常分支</div>}
+      {event.renderWarnings && event.renderWarnings.length > 0 && (
+        <details>
+          <summary>模板告警 ({event.renderWarnings.length})</summary>
+          <ul>
+            {event.renderWarnings.map((w, i) => (
+              <li key={i}>{w}</li>
+            ))}
+          </ul>
+        </details>
+      )}
       <h4>请求头</h4>
       <HeaderTable headers={event.requestHeaders} />
       <h4>请求体</h4>
