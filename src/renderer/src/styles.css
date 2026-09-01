@@ -58,3 +58,11 @@ table.kv .k { color: #8ab4ff; width: 200px; }
 .cert-cmd-label { margin-bottom: 4px; }
 .cert-cmd-row { display: flex; gap: 8px; align-items: flex-start; }
 .cert-cmd-row code { flex: 1; background: #26272e; border-radius: 6px; padding: 8px 10px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 1.6; white-space: pre-wrap; word-break: break-all; user-select: all; }
+.form-section { border-top: 1px solid #33343c; margin-top: 14px; padding-top: 10px; }
+.form-section > summary { cursor: pointer; color: #8ab4ff; font-size: 12px; margin-bottom: 10px; user-select: none; }
+.snippet-bar { display: flex; flex-wrap: wrap; gap: 6px; }
+.snippet-bar button { font-size: 11px; padding: 2px 8px; }
+.preview { background: #1e1f24; border-radius: 6px; padding: 8px; margin-top: 6px; white-space: pre-wrap; word-break: break-all; max-height: 160px; overflow-y: auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.text-warn { color: #e5a50a; }
+.text-warn li { margin-left: 16px; font-size: 12px; }
+.form-grid label.checkbox { display: flex; align-items: center; gap: 6px; color: #e2e2e8; text-align: left; }
