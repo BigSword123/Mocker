@@ -17,9 +17,11 @@ input, select, textarea { background: #26272e; color: #e2e2e8; border: 1px solid
 .tabs button { border: none; border-radius: 6px 6px 0 0; background: transparent; padding: 8px 16px; color: #8a8b96; }
 .tabs button.active { background: #26272e; color: #fff; }
 .content { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+.content > * { min-height: 0; }
+.traffic-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 .toolbar { display: flex; gap: 8px; align-items: center; padding: 10px 14px; }
 .toolbar input { flex: 1; max-width: 420px; }
-.split { flex: 1; display: flex; overflow: hidden; }
+.split { flex: 1; display: flex; overflow: hidden; min-height: 0; }
 .traffic-table { flex: 3; overflow-y: auto; border-right: 1px solid #33343c; }
 .traffic-table .row { display: flex; align-items: center; gap: 8px; padding: 0 12px; cursor: default; border-bottom: 1px solid #2a2b32; }
 .traffic-table .row:hover { background: #26272e; }
