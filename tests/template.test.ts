@@ -77,6 +77,11 @@ describe('renderTemplate — request context', () => {
     const c = { ...ctx, body: 'not-json' };
     expect(renderTemplate('{{req.body.json.userId}}', c)).toBe('');
   });
+
+  it('returns empty for dangerous segments in req.body.json path', () => {
+    expect(renderTemplate('{{req.body.json.__proto__}}', ctx)).toBe('');
+    expect(renderTemplate('{{req.body.json.constructor}}', ctx)).toBe('');
+  });
 });
 
 describe('renderTemplate — faker', () => {
@@ -100,6 +105,11 @@ describe('renderTemplate — faker', () => {
   it('rejects faker.helpers.fake to prevent template recursion', () => {
     const out = renderTemplate('{{faker.helpers.fake:hi}}', ctx);
     expect(out).toBe('{{faker.helpers.fake:hi}}');
+  });
+
+  it('rejects dangerous keys in faker method segments', () => {
+    const out = renderTemplate('{{faker.person.constructor}}', ctx);
+    expect(out).toBe('{{faker.person.constructor}}');
   });
 });
 

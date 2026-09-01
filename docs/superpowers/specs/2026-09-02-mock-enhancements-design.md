@@ -162,10 +162,18 @@ export interface TrafficEvent {
 | `ETIMEDOUT` | `thenTimeout(timeoutMs)` | `timeoutMs` 独立于 `delayMs`：未配置时默认 30_000；若需要在规则中配置，可在 `NetworkError` 上追加 `timeoutMs`（本设计暂不开放，固定 30s） |
 | `ENOTFOUND` | `thenCloseConnection()` | 客户端已建立连接后被关闭，等价于 DNS 失败后的连接失败 |
 | `ECONNREFUSED` | `thenCloseConnection()` | 同上，客户端视角为连接失败 |
-| `TRUNCATE` | `thenCallback` 内写 headers + 部分 body 后 `res.socket.destroy()` | 模拟响应中途断开 |
-| `HTTP_STATUS` | 走正常响应分支，`status = errorStatusCode`，body 可置空 | 可结合模板渲染错误报文；此分支**不属于异常**，正常参与 `delayMs` 执行 |
+| `TRUNCATE` | 降级为连接重置（同 `ECONNRESET`） | 见下方实现偏差 |
+| `HTTP_STATUS` | 掷骰命中异常分支后返回 `status = errorStatusCode` 的空响应 | 见下方实现偏差 |
 
 若 mockttp 版本不提供 `thenTimeout`，降级为 `await sleep(N) + thenCloseConnection()`。
+
+### 实现偏差（已批准）
+
+单处理器（`beforeRequest`）架构下的最终落地语义：
+
+1. **`ETIMEDOUT`**：降级为直接关闭连接（无真实等待），客户端表现为失联。
+2. **`TRUNCATE`**：降级为立即重置连接，不做字节级截断。
+3. **`HTTP_STATUS`**：按用户"规则响应与网络异常互斥"的决定，作为异常分支参与概率掷骰——命中即跳过 `delayMs`、返回空 body 并置 `errorTriggered`；不再走正常响应分支，也不渲染模板错误报文。
 
 ## 6. UI 变更
 

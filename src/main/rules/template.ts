@@ -135,6 +135,7 @@ function renderReqBody(token: string, ctx: RenderContext): string {
   let cur: unknown = parsed;
   for (const seg of segments) {
     if (cur == null || typeof cur !== 'object') return '';
+    if (DANGEROUS_KEYS.has(seg)) return '';
     cur = (cur as Record<string, unknown>)[seg];
   }
   return cur == null ? '' : String(cur);
@@ -148,7 +149,7 @@ function renderFaker(path: string, args: string[], locale: string | undefined): 
   if (FAKER_BLOCKLIST.has(`${moduleKey}.${methodKey}`)) {
     throw new Error(`${moduleKey}.${methodKey} 已禁用`);
   }
-  if (DANGEROUS_KEYS.has(moduleKey)) throw new Error(`faker.${moduleKey} 已禁用`);
+  if (parts.some((p) => DANGEROUS_KEYS.has(p))) throw new Error(`faker.${path} 已禁用`);
   const faker = (locale && FAKERS[locale]) || FAKERS.en;
   const mod = (faker as unknown as Record<string, unknown>)[moduleKey];
   if (!mod || typeof mod !== 'object') throw new Error(`faker.${moduleKey} 不存在`);
