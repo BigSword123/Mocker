@@ -102,4 +102,14 @@ export interface RuleAction {
   networkError?: NetworkError;
 }
 
+export interface RenderContext {
+  method: string;
+  url: string;
+  host: string;
+  path: string;
+  query: Record<string, string>;
+  headers: Record<string, string>;
+  body: string;
+}
+
 export const DELAY_MS_MAX = 300_000;

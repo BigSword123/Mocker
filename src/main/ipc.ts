@@ -7,7 +7,9 @@ import type { SettingsStore } from './storage/settings-store';
 import { disableSystemProxy, enableSystemProxy, systemProxyEnabled } from './system-proxy';
 import type { CaMaterial } from './certs/ca';
 import { buildCertInstallCommands } from './certs/install-commands';
-import type { RuleInput, RulePatch, Settings } from '../shared/types';
+import type { RenderContext, RuleAction, RuleInput, RulePatch, Settings } from '../shared/types';
+import { validateAction } from './rules/validate';
+import { renderTemplate } from './rules/template';
 
 export interface IpcContext {
   proxy: ProxyServer;
@@ -58,6 +60,19 @@ export function registerIpc(ctx: IpcContext): void {
   ipcMain.handle('rules:add', (_e, input: RuleInput) => ctx.rules.add(input));
   ipcMain.handle('rules:update', (_e, id: string, patch: RulePatch) => ctx.rules.update(id, patch));
   ipcMain.handle('rules:remove', (_e, id: string) => ctx.rules.remove(id));
+
+  ipcMain.handle('rules:validate', (_e, action: RuleAction) => {
+    validateAction(action);
+  });
+
+  ipcMain.handle(
+    'template:preview',
+    (_e, payload: { text: string; context: RenderContext; locale?: string }) => {
+      const warnings: string[] = [];
+      const rendered = renderTemplate(payload.text, payload.context, payload.locale, warnings);
+      return { rendered, warnings };
+    },
+  );
 
   ipcMain.handle('settings:get', () => ctx.settings.get());
   ipcMain.handle('settings:set', (_e, patch: Partial<Settings>) => {

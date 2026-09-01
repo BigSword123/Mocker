@@ -5,16 +5,9 @@ import { faker as fakerJa } from '@faker-js/faker/locale/ja';
 import { faker as fakerKo } from '@faker-js/faker/locale/ko';
 import { faker as fakerDe } from '@faker-js/faker/locale/de';
 import { faker as fakerFr } from '@faker-js/faker/locale/fr';
+import type { RenderContext } from '../../shared/types';
 
-export interface RenderContext {
-  method: string;
-  url: string;
-  host: string;
-  path: string;
-  query: Record<string, string>;
-  headers: Record<string, string>;
-  body: string;
-}
+export type { RenderContext };
 
 const FAKERS: Record<string, Faker> = {
   en: fakerEn,
