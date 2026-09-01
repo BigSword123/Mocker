@@ -1,12 +1,14 @@
 import { useState } from 'react';
-import type {
-  HttpMethod,
-  MockRule,
-  NetworkErrorType,
-  RenderContext,
-  RuleAction,
-  RuleInput,
-  UrlPatternType,
+import {
+  DELAY_MS_MAX,
+  NETWORK_ERROR_TYPES,
+  type HttpMethod,
+  type MockRule,
+  type NetworkErrorType,
+  type RenderContext,
+  type RuleAction,
+  type RuleInput,
+  type UrlPatternType,
 } from '../../../shared/types';
 import { api } from '../lib/api';
 
@@ -17,14 +19,6 @@ const URL_TYPES: Array<{ value: UrlPatternType; label: string }> = [
   { value: 'regex', label: '正则' },
 ];
 const LOCALES = ['zh_CN', 'en', 'ja', 'ko', 'de', 'fr'];
-const ERROR_TYPES: NetworkErrorType[] = [
-  'ECONNRESET',
-  'ETIMEDOUT',
-  'ENOTFOUND',
-  'ECONNREFUSED',
-  'TRUNCATE',
-  'HTTP_STATUS',
-];
 const SNIPPETS = [
   { label: 'now', text: '{{now:iso}}' },
   { label: 'uuid', text: '{{uuid}}' },
@@ -70,7 +64,9 @@ export default function RuleEditorModal({ initial, onClose, onSaved }: Props) {
   const [delayMs, setDelayMs] = useState<number | ''>(initial?.action.delayMs ?? '');
   const [fakerLocale, setFakerLocale] = useState(initial?.action.fakerLocale ?? 'zh_CN');
   const [neEnabled, setNeEnabled] = useState(Boolean(initial?.action.networkError));
-  const [neProbability, setNeProbability] = useState(initial?.action.networkError?.probability ?? 100);
+  const [neProbability, setNeProbability] = useState<number | ''>(
+    initial?.action.networkError?.probability ?? 100,
+  );
   const [neType, setNeType] = useState<NetworkErrorType>(initial?.action.networkError?.type ?? 'ECONNRESET');
   const [neStatusCode, setNeStatusCode] = useState<number | ''>(
     initial?.action.networkError?.errorStatusCode ?? '',
@@ -85,11 +81,11 @@ export default function RuleEditorModal({ initial, onClose, onSaved }: Props) {
       headers: { 'content-type': 'application/json', ...parseLines(respHeadersText, ': ') },
       body,
     };
-    if (delayMs !== '') action.delayMs = Number(delayMs);
+    if (delayMs !== '') action.delayMs = delayMs;
     if (fakerLocale) action.fakerLocale = fakerLocale;
     if (neEnabled) {
       action.networkError = {
-        probability: Number(neProbability),
+        probability: neProbability === '' ? 100 : Number(neProbability),
         type: neType,
         ...(neType === 'HTTP_STATUS' && neStatusCode !== ''
           ? { errorStatusCode: Number(neStatusCode) }
@@ -233,7 +229,7 @@ export default function RuleEditorModal({ initial, onClose, onSaved }: Props) {
               type="number"
               value={delayMs}
               min={0}
-              max={300000}
+              max={DELAY_MS_MAX}
               onChange={(e) => setDelayMs(e.target.value === '' ? '' : Number(e.target.value))}
             />
             <label>网络异常</label>
@@ -254,11 +250,11 @@ export default function RuleEditorModal({ initial, onClose, onSaved }: Props) {
                   max={100}
                   step={0.1}
                   value={neProbability}
-                  onChange={(e) => setNeProbability(Number(e.target.value))}
+                  onChange={(e) => setNeProbability(e.target.value === '' ? '' : Number(e.target.value))}
                 />
                 <label>异常类型</label>
                 <select value={neType} onChange={(e) => setNeType(e.target.value as NetworkErrorType)}>
-                  {ERROR_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                  {NETWORK_ERROR_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
                 </select>
                 {neType === 'HTTP_STATUS' && (
                   <>
