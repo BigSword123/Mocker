@@ -137,7 +137,9 @@ describe('ProxyServer', () => {
     expect(await res.text()).toBe('sub-mocked');
   });
 
-  // Keep last: exercises a full stop/restart of the shared proxy instance.
+  // Keep last within this block: exercises a full stop/restart of the shared
+  // proxy instance. The 'enhanced mock rule behavior' describe below runs after
+  // and rides the restarted proxy.
   it('stop then restart works', async () => {
     await proxy.stop();
     expect(proxy.running).toBe(false);
@@ -185,7 +187,12 @@ describe('enhanced mock rule behavior', () => {
       action: { status: 200, headers: {}, body: '', networkError: { probability: 100, type: 'ECONNRESET' } },
     }];
     const agent = new ProxyAgent(`http://127.0.0.1:${proxy.port}`);
-    await expect(fetch('http://api.example.test/boom', { dispatcher: agent })).rejects.toThrow();
+    const err = await fetch('http://api.example.test/boom', { dispatcher: agent }).then(
+      () => null,
+      (e) => e,
+    );
+    expect(err).not.toBeNull();
+    expect((err as { cause?: { code?: string } })?.cause?.code).toBe('ECONNRESET');
     await waitFor(() => events.some((e) => e.errorTriggered));
     const ev = events.find((e) => e.errorTriggered)!;
     expect(ev.error).toBe('network-error:ECONNRESET');

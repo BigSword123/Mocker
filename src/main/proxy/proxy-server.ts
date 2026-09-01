@@ -138,8 +138,10 @@ export class ProxyServer {
   }
 
   async stop(): Promise<void> {
+    // Abort but keep the controller: a handler that reaches its delay after
+    // stop() began must still see an aborted signal, not undefined. doStart()
+    // replaces it on the next start.
     this.abort?.abort();
-    this.abort = undefined;
     await this.server?.stop();
     this.server = undefined;
     this.events.clear();
