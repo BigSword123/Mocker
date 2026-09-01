@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resolveNetworkError, type NetworkErrorResolution } from '../src/main/rules/network-error';
-import type { NetworkError } from '../src/shared/types';
+import { resolveNetworkError } from '../src/main/rules/network-error';
 
 describe('resolveNetworkError', () => {
   it('maps ECONNRESET to reset', () => {
