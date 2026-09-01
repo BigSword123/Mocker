@@ -3,6 +3,9 @@ import * as mockttp from 'mockttp';
 import type { MockRule, Settings, TrafficEvent } from '../../shared/types';
 import { findMatchingRule } from '../rules/engine';
 import type { RequestDescription } from '../rules/matcher';
+import { renderTemplate, type RenderContext } from '../rules/template';
+import { resolveNetworkError } from '../rules/network-error';
+import { sleep } from '../util/sleep';
 import { certDownloadResponse, guidePageResponse, type OnboardingResponse } from './onboarding';
 
 export interface ProxyServerOptions {
@@ -28,6 +31,7 @@ export interface ProxyServerOptions {
  */
 export class ProxyServer {
   private server?: mockttp.Mockttp;
+  private abort?: AbortController;
   private events = new Map<string, TrafficEvent>();
   private startPromise?: Promise<void>;
   private proxyHosts: Set<string> = new Set(['localhost', '127.0.0.1']);
@@ -56,6 +60,7 @@ export class ProxyServer {
 
   private async doStart(): Promise<void> {
     const settings = this.opts.getSettings();
+    this.abort = new AbortController();
 
     // Addresses this proxy is actually reachable on: the machine's non-internal
     // IPv4s plus loopback. The onboarding endpoints must only answer for the
@@ -133,6 +138,8 @@ export class ProxyServer {
   }
 
   async stop(): Promise<void> {
+    this.abort?.abort();
+    this.abort = undefined;
     await this.server?.stop();
     this.server = undefined;
     this.events.clear();
@@ -164,23 +171,72 @@ export class ProxyServer {
 
     const matched = findMatchingRule(this.opts.getRules(), describeRequest(req, bodyText));
     if (matched) {
-      event.mocked = true;
-      event.matchedRuleId = matched.id;
-      event.status = matched.action.status;
-      event.responseHeaders = matched.action.headers;
-      event.responseBody = matched.action.body;
-      event.completedAt = Date.now();
-      this.emit(event);
-      return {
-        response: toCallbackResponse({
-          statusCode: matched.action.status,
-          headers: matched.action.headers,
-          body: matched.action.body,
-        }),
-      };
+      return await this.handleMatched(matched, req, event, bodyText);
     }
 
     return undefined;
+  }
+
+  /**
+   * Handles a matched rule: either fires a probabilistic network error, or
+   * applies the optional delay, renders the templated body/headers, and returns
+   * the mocked response.
+   */
+  private async handleMatched(
+    matched: MockRule,
+    req: mockttp.CompletedRequest,
+    event: TrafficEvent,
+    bodyText: string,
+  ): Promise<mockttp.requestSteps.CallbackRequestResult | void> {
+    event.mocked = true;
+    event.matchedRuleId = matched.id;
+
+    const ne = matched.action.networkError;
+    if (ne && Math.random() * 100 < ne.probability) {
+      event.errorTriggered = true;
+      event.error = `network-error:${ne.type}`;
+      event.completedAt = Date.now();
+      this.emit(event);
+      const resolution = resolveNetworkError(ne);
+      if (resolution.kind === 'reset') return { response: 'reset' };
+      if (resolution.kind === 'close') return { response: 'close' };
+      return {
+        response: { statusCode: resolution.statusCode, headers: {}, body: '' },
+      };
+    }
+
+    const delayMs = matched.action.delayMs ?? 0;
+    if (delayMs > 0) {
+      try {
+        await sleep(delayMs, this.abort?.signal);
+      } catch {
+        // Proxy is stopping; drop the request rather than forward it.
+        return { response: 'close' };
+      }
+    }
+
+    const ctx = buildRenderContext(req, bodyText);
+    const warnings: string[] = [];
+    const body = renderTemplate(matched.action.body, ctx, matched.action.fakerLocale, warnings);
+    const headers: Record<string, string> = {};
+    for (const [k, v] of Object.entries(matched.action.headers)) {
+      headers[k] = renderTemplate(v, ctx, matched.action.fakerLocale, warnings);
+    }
+
+    event.status = matched.action.status;
+    event.responseHeaders = headers;
+    event.responseBody = body;
+    event.renderWarnings = warnings.length > 0 ? warnings : undefined;
+    event.completedAt = Date.now();
+    this.emit(event);
+
+    return {
+      response: toCallbackResponse({
+        statusCode: matched.action.status,
+        headers,
+        body,
+      }),
+    };
   }
 
   private isProxyHost(hostname: string): boolean {
@@ -252,6 +308,27 @@ function describeRequest(req: mockttp.CompletedRequest, body: string): RequestDe
   return {
     method: req.method,
     url,
+    query,
+    headers: flattenHeaders(req.headers),
+    body,
+  };
+}
+
+function buildRenderContext(req: mockttp.CompletedRequest, body: string): RenderContext {
+  const url = absoluteUrl(req);
+  const query: Record<string, string> = {};
+  try {
+    new URL(url).searchParams.forEach((v, k) => {
+      query[k] = v;
+    });
+  } catch {
+    // Malformed URL: render with an empty query.
+  }
+  return {
+    method: req.method,
+    url,
+    host: req.destination.hostname,
+    path: req.path,
     query,
     headers: flattenHeaders(req.headers),
     body,

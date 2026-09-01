@@ -151,6 +151,69 @@ describe('ProxyServer', () => {
   });
 });
 
+describe('enhanced mock rule behavior', () => {
+  it('applies a fixed delay before responding', async () => {
+    rules = [{
+      id: 'delay', name: 'delay', enabled: true, priority: 1,
+      match: { urlType: 'exact', urlPattern: 'http://api.example.test/slow', method: 'ANY' },
+      action: { status: 200, headers: { 'content-type': 'text/plain' }, body: 'ok', delayMs: 250 },
+    }];
+    const agent = new ProxyAgent(`http://127.0.0.1:${proxy.port}`);
+    const start = Date.now();
+    const res = await fetch('http://api.example.test/slow', { dispatcher: agent });
+    const elapsed = Date.now() - start;
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe('ok');
+    expect(elapsed).toBeGreaterThanOrEqual(200);
+  });
+
+  it('renders {{uuid}} and {{req.path}} in the response body', async () => {
+    rules = [{
+      id: 'tpl', name: 'tpl', enabled: true, priority: 1,
+      match: { urlType: 'exact', urlPattern: 'http://api.example.test/hello', method: 'ANY' },
+      action: { status: 200, headers: { 'content-type': 'text/plain' }, body: 'path={{req.path}} uuid={{uuid}}' },
+    }];
+    const agent = new ProxyAgent(`http://127.0.0.1:${proxy.port}`);
+    const res = await fetch('http://api.example.test/hello', { dispatcher: agent });
+    expect(await res.text()).toMatch(/^path=\/hello uuid=[0-9a-f-]+$/i);
+  });
+
+  it('resets the connection when a network error fires at 100%', async () => {
+    rules = [{
+      id: 'err', name: 'err', enabled: true, priority: 1,
+      match: { urlType: 'exact', urlPattern: 'http://api.example.test/boom', method: 'ANY' },
+      action: { status: 200, headers: {}, body: '', networkError: { probability: 100, type: 'ECONNRESET' } },
+    }];
+    const agent = new ProxyAgent(`http://127.0.0.1:${proxy.port}`);
+    await expect(fetch('http://api.example.test/boom', { dispatcher: agent })).rejects.toThrow();
+    await waitFor(() => events.some((e) => e.errorTriggered));
+    const ev = events.find((e) => e.errorTriggered)!;
+    expect(ev.error).toBe('network-error:ECONNRESET');
+  });
+
+  it('returns the configured status for HTTP_STATUS network errors', async () => {
+    rules = [{
+      id: 'http-err', name: 'http-err', enabled: true, priority: 1,
+      match: { urlType: 'exact', urlPattern: 'http://api.example.test/gateway', method: 'ANY' },
+      action: { status: 200, headers: {}, body: '', networkError: { probability: 100, type: 'HTTP_STATUS', errorStatusCode: 504 } },
+    }];
+    const agent = new ProxyAgent(`http://127.0.0.1:${proxy.port}`);
+    const res = await fetch('http://api.example.test/gateway', { dispatcher: agent });
+    expect(res.status).toBe(504);
+  });
+
+  it('does not fire network errors at 0% probability', async () => {
+    rules = [{
+      id: 'never', name: 'never', enabled: true, priority: 1,
+      match: { urlType: 'exact', urlPattern: 'http://api.example.test/safe', method: 'ANY' },
+      action: { status: 200, headers: { 'content-type': 'text/plain' }, body: 'safe-ok', networkError: { probability: 0, type: 'ECONNRESET' } },
+    }];
+    const agent = new ProxyAgent(`http://127.0.0.1:${proxy.port}`);
+    const res = await fetch('http://api.example.test/safe', { dispatcher: agent });
+    expect(await res.text()).toBe('safe-ok');
+  });
+});
+
 async function waitFor(cond: () => boolean, timeoutMs = 5000): Promise<void> {
   const start = Date.now();
   while (!cond()) {
