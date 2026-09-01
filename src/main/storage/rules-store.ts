@@ -14,7 +14,11 @@ function cloneRule(rule: MockRule): MockRule {
       ...(rule.match.query ? { query: { ...rule.match.query } } : {}),
       ...(rule.match.headers ? { headers: { ...rule.match.headers } } : {}),
     },
-    action: { ...rule.action, headers: { ...rule.action.headers } },
+    action: {
+      ...rule.action,
+      headers: { ...rule.action.headers },
+      ...(rule.action.networkError ? { networkError: { ...rule.action.networkError } } : {}),
+    },
   };
 }
 

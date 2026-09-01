@@ -10,12 +10,6 @@ export interface RuleMatch {
   bodyContains?: string;
 }
 
-export interface RuleAction {
-  status: number;
-  headers: Record<string, string>;
-  body: string;
-}
-
 export interface MockRule {
   id: string;
   name: string;
@@ -44,6 +38,8 @@ export interface TrafficEvent {
   mocked: boolean;
   matchedRuleId?: string;
   error?: string;
+  renderWarnings?: string[];
+  errorTriggered?: boolean;
 }
 
 export type HttpsMode = 'whitelist' | 'full';
@@ -79,3 +75,36 @@ export interface CertInstallCommands {
   macos: string;
   windows: string;
 }
+
+export type NetworkErrorType =
+  | 'ECONNRESET'
+  | 'ETIMEDOUT'
+  | 'ENOTFOUND'
+  | 'ECONNREFUSED'
+  | 'TRUNCATE'
+  | 'HTTP_STATUS';
+
+export interface NetworkError {
+  probability: number;
+  type: NetworkErrorType;
+  errorStatusCode?: number;
+}
+
+export interface RuleAction {
+  status: number;
+  headers: Record<string, string>;
+  body: string;
+  delayMs?: number;
+  fakerLocale?: string;
+  networkError?: NetworkError;
+}
+
+export const DELAY_MS_MAX = 300_000;
+export const NETWORK_ERROR_TYPES: NetworkErrorType[] = [
+  'ECONNRESET',
+  'ETIMEDOUT',
+  'ENOTFOUND',
+  'ECONNREFUSED',
+  'TRUNCATE',
+  'HTTP_STATUS',
+];
