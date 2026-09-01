@@ -126,4 +126,24 @@ describe('RulesStore', () => {
     const priorities = store.list().map((r) => r.priority);
     expect(new Set(priorities).size).toBe(priorities.length);
   });
+
+  it('clones networkError so mutating a listed rule cannot affect the store', async () => {
+    const store = new RulesStore(dir);
+    await store.load();
+    const withError: RuleInput = {
+      name: 'net',
+      enabled: true,
+      match: { urlType: 'exact', urlPattern: 'http://x.com/net', method: 'ANY' },
+      action: {
+        status: 200,
+        headers: {},
+        body: 'net',
+        networkError: { probability: 50, type: 'ECONNRESET' },
+      },
+    };
+    await store.add(withError);
+    const listed = store.list()[0];
+    listed.action.networkError!.probability = 0;
+    expect(store.list()[0].action.networkError!.probability).toBe(50);
+  });
 });

@@ -76,13 +76,16 @@ export interface CertInstallCommands {
   windows: string;
 }
 
-export type NetworkErrorType =
-  | 'ECONNRESET'
-  | 'ETIMEDOUT'
-  | 'ENOTFOUND'
-  | 'ECONNREFUSED'
-  | 'TRUNCATE'
-  | 'HTTP_STATUS';
+export const NETWORK_ERROR_TYPES = [
+  'ECONNRESET',
+  'ETIMEDOUT',
+  'ENOTFOUND',
+  'ECONNREFUSED',
+  'TRUNCATE',
+  'HTTP_STATUS',
+] as const;
+
+export type NetworkErrorType = (typeof NETWORK_ERROR_TYPES)[number];
 
 export interface NetworkError {
   probability: number;
@@ -100,11 +103,3 @@ export interface RuleAction {
 }
 
 export const DELAY_MS_MAX = 300_000;
-export const NETWORK_ERROR_TYPES: NetworkErrorType[] = [
-  'ECONNRESET',
-  'ETIMEDOUT',
-  'ENOTFOUND',
-  'ECONNREFUSED',
-  'TRUNCATE',
-  'HTTP_STATUS',
-];

@@ -65,4 +65,23 @@ describe('validateAction', () => {
       }),
     ).not.toThrow();
   });
+
+  it('rejects NaN probability', () => {
+    expect(() =>
+      validateAction({ ...base, networkError: { probability: Number.NaN, type: 'ECONNRESET' } }),
+    ).toThrow(/probability/);
+  });
+
+  it('rejects unknown networkError.type', () => {
+    expect(() =>
+      validateAction({
+        ...base,
+        networkError: { probability: 50, type: 'BOGUS' as never },
+      }),
+    ).toThrow(/networkError\.type/);
+  });
+
+  it('rejects NaN delayMs', () => {
+    expect(() => validateAction({ ...base, delayMs: Number.NaN })).toThrow(/delayMs/);
+  });
 });
