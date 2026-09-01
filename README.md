@@ -58,6 +58,10 @@ curl -x http://127.0.0.1:8888 "http://www.example.com/"
 
 见「设备接入」页说明：Android 7+ 用户证书、SSL Pinning、iOS 私有中继、HTTP/3。
 
+## 文档
+
+- [规则增强用法（时延/动态数据/网络异常）](docs/guide-enhancements.md)
+
 ## 设计文档
 
 `docs/superpowers/specs/2026-09-01-mocker-design.md`
