@@ -73,3 +73,9 @@ export interface ProxyStatus {
 export interface CertInfo {
   expiresAt: number;
 }
+
+export interface CertInstallCommands {
+  platform: 'macos' | 'windows' | 'other';
+  macos: string;
+  windows: string;
+}

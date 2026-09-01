@@ -52,3 +52,9 @@ table.kv .k { color: #8ab4ff; width: 200px; }
 .guide { max-width: 720px; line-height: 1.7; }
 .guide code { background: #33343c; padding: 2px 6px; border-radius: 4px; }
 .guide h3 { margin: 16px 0 6px; }
+.cert-section { margin-top: 28px; max-width: 860px; }
+.cert-section h3 { font-size: 13px; margin-bottom: 10px; }
+.cert-cmd-block { margin-bottom: 16px; }
+.cert-cmd-label { margin-bottom: 4px; }
+.cert-cmd-row { display: flex; gap: 8px; align-items: flex-start; }
+.cert-cmd-row code { flex: 1; background: #26272e; border-radius: 6px; padding: 8px 10px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 1.6; white-space: pre-wrap; word-break: break-all; user-select: all; }

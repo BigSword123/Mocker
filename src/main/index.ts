@@ -68,6 +68,7 @@ async function bootstrap(): Promise<void> {
     settings,
     ca,
     history,
+    dataDir,
     systemProxySetByUs: () => systemProxySetByUs,
     onSystemProxyChanged: (enabled) => {
       systemProxySetByUs = enabled;

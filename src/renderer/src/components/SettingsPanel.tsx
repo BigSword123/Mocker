@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { HttpsMode, Settings } from '../../../shared/types';
+import type { CertInstallCommands, HttpsMode, Settings } from '../../../shared/types';
 import { api } from '../lib/api';
 
 export default function SettingsPanel() {
@@ -7,10 +7,12 @@ export default function SettingsPanel() {
   const [systemProxy, setSystemProxy] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
+  const [certCmds, setCertCmds] = useState<CertInstallCommands | null>(null);
 
   useEffect(() => {
     api.settingsGet().then(setSettings).catch(() => {});
     api.systemProxyStatus().then(setSystemProxy).catch(() => setSystemProxy(false));
+    api.certInstallCommands().then(setCertCmds).catch(() => {});
   }, []);
 
   if (!settings) return <div className="panel muted">加载中…</div>;
@@ -106,6 +108,45 @@ export default function SettingsPanel() {
           保存并重启代理
         </button>
         {message && <span className="muted">{message}</span>}
+      </div>
+      {certCmds && (
+        <div className="cert-section">
+          <h3>安装根证书（HTTPS 解密必需）</h3>
+          <CertCmd
+            label={`macOS${certCmds.platform === 'macos' ? '（当前系统）' : ''}`}
+            note="在终端执行，需输入管理员密码"
+            cmd={certCmds.macos}
+          />
+          <CertCmd
+            label={`Windows${certCmds.platform === 'windows' ? '（当前系统）' : ''}`}
+            note="在管理员权限的 CMD 中执行"
+            cmd={certCmds.windows}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CertCmd({ label, note, cmd }: { label: string; note: string; cmd: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(cmd);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // 剪贴板不可用时静默失败，用户可手动选中复制
+    }
+  };
+  return (
+    <div className="cert-cmd-block">
+      <div className="cert-cmd-label">
+        {label} <span className="muted">{note}</span>
+      </div>
+      <div className="cert-cmd-row">
+        <code>{cmd}</code>
+        <button onClick={copy}>{copied ? '已复制' : '复制'}</button>
       </div>
     </div>
   );

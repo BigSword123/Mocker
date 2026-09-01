@@ -1,4 +1,4 @@
-import type { CertInfo, MockRule, ProxyStatus, RuleInput, RulePatch, Settings } from './types';
+import type { CertInfo, CertInstallCommands, MockRule, ProxyStatus, RuleInput, RulePatch, Settings } from './types';
 
 export interface Api {
   proxyStart(): Promise<void>;
@@ -11,6 +11,7 @@ export interface Api {
   settingsGet(): Promise<Settings>;
   settingsSet(patch: Partial<Settings>): Promise<Settings>;
   certInfo(): Promise<CertInfo>;
+  certInstallCommands(): Promise<CertInstallCommands>;
   systemProxySet(enabled: boolean): Promise<void>;
   systemProxyStatus(): Promise<boolean>;
 }

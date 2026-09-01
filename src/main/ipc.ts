@@ -6,6 +6,7 @@ import type { RulesStore } from './storage/rules-store';
 import type { SettingsStore } from './storage/settings-store';
 import { disableSystemProxy, enableSystemProxy, systemProxyEnabled } from './system-proxy';
 import type { CaMaterial } from './certs/ca';
+import { buildCertInstallCommands } from './certs/install-commands';
 import type { RuleInput, RulePatch, Settings } from '../shared/types';
 
 export interface IpcContext {
@@ -14,6 +15,7 @@ export interface IpcContext {
   settings: SettingsStore;
   ca: CaMaterial;
   history: HistoryWriter;
+  dataDir: string;
   systemProxySetByUs: () => boolean;
   onSystemProxyChanged: (enabled: boolean) => void;
 }
@@ -68,6 +70,7 @@ export function registerIpc(ctx: IpcContext): void {
   });
 
   ipcMain.handle('cert:info', () => ({ expiresAt: ctx.ca.notAfter.getTime() }));
+  ipcMain.handle('cert:install-commands', () => buildCertInstallCommands(ctx.dataDir));
 
   ipcMain.handle('system-proxy:set', async (_e, enabled: boolean) => {
     if (enabled && !ctx.proxy.running) throw new Error('请先启动代理服务');
