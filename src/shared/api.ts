@@ -12,7 +12,7 @@ export interface Api {
   templatePreview(payload: {
     text: string;
     context: RenderContext;
-    locale?: string;
+    fakerLocale?: string;
   }): Promise<{ rendered: string; warnings: string[] }>;
   settingsGet(): Promise<Settings>;
   settingsSet(patch: Partial<Settings>): Promise<Settings>;

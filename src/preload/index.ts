@@ -11,7 +11,7 @@ const api: Api = {
   rulesUpdate: (id: string, patch: RulePatch) => ipcRenderer.invoke('rules:update', id, patch),
   rulesRemove: (id: string) => ipcRenderer.invoke('rules:remove', id),
   rulesValidate: (action: RuleAction) => ipcRenderer.invoke('rules:validate', action),
-  templatePreview: (payload: { text: string; context: RenderContext; locale?: string }) =>
+  templatePreview: (payload: { text: string; context: RenderContext; fakerLocale?: string }) =>
     ipcRenderer.invoke('template:preview', payload),
   settingsGet: () => ipcRenderer.invoke('settings:get'),
   settingsSet: (patch: Partial<Settings>) => ipcRenderer.invoke('settings:set', patch),

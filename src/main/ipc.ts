@@ -57,8 +57,14 @@ export function registerIpc(ctx: IpcContext): void {
   }));
 
   ipcMain.handle('rules:list', () => ctx.rules.list());
-  ipcMain.handle('rules:add', (_e, input: RuleInput) => ctx.rules.add(input));
-  ipcMain.handle('rules:update', (_e, id: string, patch: RulePatch) => ctx.rules.update(id, patch));
+  ipcMain.handle('rules:add', (_e, input: RuleInput) => {
+    validateAction(input.action);
+    return ctx.rules.add(input);
+  });
+  ipcMain.handle('rules:update', (_e, id: string, patch: RulePatch) => {
+    if (patch.action) validateAction(patch.action);
+    return ctx.rules.update(id, patch);
+  });
   ipcMain.handle('rules:remove', (_e, id: string) => ctx.rules.remove(id));
 
   ipcMain.handle('rules:validate', (_e, action: RuleAction) => {
@@ -67,9 +73,9 @@ export function registerIpc(ctx: IpcContext): void {
 
   ipcMain.handle(
     'template:preview',
-    (_e, payload: { text: string; context: RenderContext; locale?: string }) => {
+    (_e, payload: { text: string; context: RenderContext; fakerLocale?: string }) => {
       const warnings: string[] = [];
-      const rendered = renderTemplate(payload.text, payload.context, payload.locale, warnings);
+      const rendered = renderTemplate(payload.text, payload.context, payload.fakerLocale, warnings);
       return { rendered, warnings };
     },
   );
