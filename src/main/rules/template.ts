@@ -25,8 +25,11 @@ const FAKERS: Record<string, Faker> = {
   fr: fakerFr,
 };
 
-const TOKEN_RE = /\{\{\s*([^{}]+?)\s*\}\}/g;
+// Trim happens in resolve(); the tight [^{}]+ avoids catastrophic backtracking
+// on unclosed tokens that the \s* variants exhibited.
+const TOKEN_RE = /\{\{([^{}]+)\}\}/g;
 const FAKER_BLOCKLIST = new Set(['helpers.fake']);
+const DANGEROUS_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 
 const UNKNOWN = Symbol('unknown-token');
 
@@ -43,7 +46,8 @@ export function renderTemplate(
       const resolved = resolve(token.trim(), args, ctx, locale, warnings);
       return resolved === UNKNOWN ? match : resolved;
     } catch (err) {
-      warnings.push(`template_warn: ${raw}: ${(err as Error).message}`);
+      const message = err instanceof Error ? err.message : String(err);
+      warnings.push(`template_warn: ${raw}: ${message}`);
       return match;
     }
   });
@@ -56,7 +60,7 @@ function resolve(
   locale: string | undefined,
   warnings: string[],
 ): string | typeof UNKNOWN {
-  if (token === 'now') return renderNow(args[0]);
+  if (token === 'now') return renderNow(args.join(':') || undefined);
   if (token === 'uuid') return randomUUID();
   if (token.startsWith('random.')) return renderRandom(token.slice('random.'.length), args);
   if (token === 'req.body' || token.startsWith('req.body.')) return renderReqBody(token, ctx);
@@ -151,6 +155,7 @@ function renderFaker(path: string, args: string[], locale: string | undefined): 
   if (FAKER_BLOCKLIST.has(`${moduleKey}.${methodKey}`)) {
     throw new Error(`${moduleKey}.${methodKey} 已禁用`);
   }
+  if (DANGEROUS_KEYS.has(moduleKey)) throw new Error(`faker.${moduleKey} 已禁用`);
   const faker = (locale && FAKERS[locale]) || FAKERS.en;
   const mod = (faker as unknown as Record<string, unknown>)[moduleKey];
   if (!mod || typeof mod !== 'object') throw new Error(`faker.${moduleKey} 不存在`);

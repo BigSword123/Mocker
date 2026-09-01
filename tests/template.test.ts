@@ -42,6 +42,16 @@ describe('renderTemplate — builtins', () => {
   it('replaces {{random.string:len}} with given length', () => {
     expect(renderTemplate('{{random.string:8}}', ctx)).toHaveLength(8);
   });
+
+  it('formats {{now:YYYY-MM-DD}}', () => {
+    expect(renderTemplate('{{now:YYYY-MM-DD}}', ctx)).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it('replaces {{random.float:min:max:precision}} within bounds', () => {
+    const out = Number(renderTemplate('{{random.float:0:1:2}}', ctx));
+    expect(out).toBeGreaterThanOrEqual(0);
+    expect(out).toBeLessThanOrEqual(1);
+  });
 });
 
 describe('renderTemplate — request context', () => {
@@ -108,5 +118,12 @@ describe('renderTemplate — edge cases', () => {
     renderTemplate('{{unknown.token}}', ctx, undefined, warnings);
     expect(warnings.length).toBe(1);
     expect(warnings[0]).toMatch(/unknown\.token/);
+  });
+
+  it('preserves token and warns when a builtin throws (missing args)', () => {
+    const warnings: string[] = [];
+    const out = renderTemplate('{{random.int}}', ctx, undefined, warnings);
+    expect(out).toBe('{{random.int}}');
+    expect(warnings.length).toBe(1);
   });
 });
