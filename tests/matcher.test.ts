@@ -27,6 +27,14 @@ describe('matchRule', () => {
     expect(matchRule({ ...m, urlPattern: 'http://other.com/*' }, req())).toBe(false);
   });
 
+  it('wildcard without * is fully anchored and misses trailing slash', () => {
+    const m: RuleMatch = { ...base, urlType: 'wildcard', urlPattern: 'http://www.baidu.com' };
+    expect(matchRule(m, req({ url: 'http://www.baidu.com/' }))).toBe(false);
+    const withStar: RuleMatch = { ...m, urlPattern: 'http://www.baidu.com*' };
+    expect(matchRule(withStar, req({ url: 'http://www.baidu.com/' }))).toBe(true);
+    expect(matchRule(withStar, req({ url: 'http://www.baidu.com/s?wd=x' }))).toBe(true);
+  });
+
   it('matches regex url', () => {
     const m: RuleMatch = { ...base, urlType: 'regex', urlPattern: '^http://api\\.example\\.com/users.*$' };
     expect(matchRule(m, req())).toBe(true);
