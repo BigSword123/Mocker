@@ -60,7 +60,7 @@ export interface TemplateCatalogItem {
 
 ### 4.1 TemplateEditor.tsx（新文件）
 
-封装 CodeMirror 6，依赖固定为三个直接依赖：`codemirror`（提供 basicSetup：高亮、括号自动闭合、键位绑定）、`@codemirror/lang-json`（JSON 语法）、`@codemirror/autocomplete`（补全源与弹窗）。
+封装 CodeMirror 6，依赖固定为五个直接依赖：`codemirror`（提供 basicSetup：高亮、括号自动闭合、键位绑定）、`@codemirror/state`、`@codemirror/view`、`@codemirror/autocomplete`（补全源与弹窗）、`@codemirror/lang-json`（JSON 语法）。
 
 - Props：`value: string`、`onChange(next: string)`、`catalog: TemplateCatalogItem[]`。
 - 行为：受控组件语义（外部 value 变化且与编辑器内容不一致时重设文档）；JSON 高亮；深色主题（背景 #26272e、边框 #4a4b55、文本 #e2e2e8，与现有 input 一致）；高度与原 textarea 相当（约 8 行，可拉伸）。
@@ -101,7 +101,7 @@ export interface TemplateCatalogItem {
 
 ## 7. 依赖变更
 
-- 新增：`codemirror`、`@codemirror/lang-json`、`@codemirror/autocomplete`。全部进 dependencies，无 native 模块。
+- 新增：`codemirror`、`@codemirror/state`、`@codemirror/view`、`@codemirror/autocomplete`、`@codemirror/lang-json`。全部进 dependencies，无 native 模块。
 - 预期渲染层 bundle：687KB → 约 1MB。
 
 ## 8. 测试策略
