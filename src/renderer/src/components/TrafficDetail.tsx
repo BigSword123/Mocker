@@ -28,11 +28,23 @@ function HeaderTable({ headers }: { headers?: Record<string, string> }) {
   );
 }
 
-export default function TrafficDetail({ event }: { event: TrafficEvent | null }) {
+interface Props {
+  event: TrafficEvent | null;
+  onCaptureToRule?: (event: TrafficEvent) => void;
+}
+
+export default function TrafficDetail({ event, onCaptureToRule }: Props) {
   if (!event) return <div className="detail empty">选择一个请求查看详情</div>;
   return (
     <div className="detail">
-      <h3>{event.method} {event.url}</h3>
+      <div className="detail-head">
+        <h3>{event.method} {event.url}</h3>
+        {onCaptureToRule && (
+          <button data-testid="capture-to-rule" onClick={() => onCaptureToRule(event)}>
+            转为规则
+          </button>
+        )}
+      </div>
       {event.error && <div className="text-err">错误：{event.error}</div>}
       {event.mocked && <div className="text-ok">由规则命中（{event.matchedRuleId}）</div>}
       {event.errorTriggered && <div className="text-warn">本次命中网络异常分支</div>}

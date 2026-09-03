@@ -1,11 +1,15 @@
 import { useMemo, useState } from 'react';
+import type { RuleInput } from '../../../shared/types';
+import { captureToRuleInput } from '../lib/capture-to-rule';
 import { useTrafficStore } from '../stores/traffic';
+import RuleEditorModal from './RuleEditorModal';
 import TrafficDetail from './TrafficDetail';
 import TrafficTable from './TrafficTable';
 
 export default function TrafficPanel() {
   const { list, filter, paused, setFilter, togglePause, clear } = useTrafficStore();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<RuleInput | null>(null);
 
   const filtered = useMemo(
     () => (filter ? list.filter((e) => e.url.includes(filter)) : list),
@@ -27,8 +31,16 @@ export default function TrafficPanel() {
       </div>
       <div className="split">
         <TrafficTable events={filtered} selectedId={selectedId} onSelect={(e) => setSelectedId(e.id)} />
-        <TrafficDetail event={selected} />
+        <TrafficDetail event={selected} onCaptureToRule={(e) => setDraft(captureToRuleInput(e))} />
       </div>
+      {draft && (
+        <RuleEditorModal
+          initial={null}
+          draft={draft}
+          onClose={() => setDraft(null)}
+          onSaved={() => setDraft(null)}
+        />
+      )}
     </div>
   );
 }
