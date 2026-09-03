@@ -45,31 +45,34 @@ function formatLines(map: Record<string, string> | undefined, sep: string): stri
 
 interface Props {
   initial: MockRule | null;
+  draft?: RuleInput;
   onClose: () => void;
   onSaved: () => void;
 }
 
-export default function RuleEditorModal({ initial, onClose, onSaved }: Props) {
-  const [name, setName] = useState(initial?.name ?? '');
-  const [urlType, setUrlType] = useState<UrlPatternType>(initial?.match.urlType ?? 'wildcard');
-  const [urlPattern, setUrlPattern] = useState(initial?.match.urlPattern ?? '');
-  const [method, setMethod] = useState<HttpMethod>(initial?.match.method ?? 'ANY');
-  const [queryText, setQueryText] = useState(formatLines(initial?.match.query, '='));
-  const [headersText, setHeadersText] = useState(formatLines(initial?.match.headers, ': '));
-  const [bodyContains, setBodyContains] = useState(initial?.match.bodyContains ?? '');
-  const [status, setStatus] = useState(initial?.action.status ?? 200);
-  const [respHeadersText, setRespHeadersText] = useState(formatLines(initial?.action.headers, ': '));
-  const [body, setBody] = useState(initial?.action.body ?? '');
+export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Props) {
+  // initial（编辑现有规则）优先；新建时可由 draft（抓包转规则）预填。两者不会同时出现。
+  const seed = initial ?? draft ?? null;
+  const [name, setName] = useState(seed?.name ?? '');
+  const [urlType, setUrlType] = useState<UrlPatternType>(seed?.match.urlType ?? 'wildcard');
+  const [urlPattern, setUrlPattern] = useState(seed?.match.urlPattern ?? '');
+  const [method, setMethod] = useState<HttpMethod>(seed?.match.method ?? 'ANY');
+  const [queryText, setQueryText] = useState(formatLines(seed?.match.query, '='));
+  const [headersText, setHeadersText] = useState(formatLines(seed?.match.headers, ': '));
+  const [bodyContains, setBodyContains] = useState(seed?.match.bodyContains ?? '');
+  const [status, setStatus] = useState(seed?.action.status ?? 200);
+  const [respHeadersText, setRespHeadersText] = useState(formatLines(seed?.action.headers, ': '));
+  const [body, setBody] = useState(seed?.action.body ?? '');
 
-  const [delayMs, setDelayMs] = useState<number | ''>(initial?.action.delayMs ?? '');
-  const [fakerLocale, setFakerLocale] = useState(initial?.action.fakerLocale ?? 'zh_CN');
-  const [neEnabled, setNeEnabled] = useState(Boolean(initial?.action.networkError));
+  const [delayMs, setDelayMs] = useState<number | ''>(seed?.action.delayMs ?? '');
+  const [fakerLocale, setFakerLocale] = useState(seed?.action.fakerLocale ?? 'zh_CN');
+  const [neEnabled, setNeEnabled] = useState(Boolean(seed?.action.networkError));
   const [neProbability, setNeProbability] = useState<number | ''>(
-    initial?.action.networkError?.probability ?? 100,
+    seed?.action.networkError?.probability ?? 100,
   );
-  const [neType, setNeType] = useState<NetworkErrorType>(initial?.action.networkError?.type ?? 'ECONNRESET');
+  const [neType, setNeType] = useState<NetworkErrorType>(seed?.action.networkError?.type ?? 'ECONNRESET');
   const [neStatusCode, setNeStatusCode] = useState<number | ''>(
-    initial?.action.networkError?.errorStatusCode ?? '',
+    seed?.action.networkError?.errorStatusCode ?? '',
   );
   const [preview, setPreview] = useState('');
   const [previewWarnings, setPreviewWarnings] = useState<string[]>([]);
