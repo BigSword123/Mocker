@@ -10,7 +10,17 @@ import {
   type RuleInput,
   type UrlPatternType,
 } from '../../../shared/types';
+import {
+  ERROR_TEMPLATES,
+  findById as findErrorTemplate,
+  type ErrorTemplateCategory,
+} from '../../../shared/error-templates';
 import { api } from '../lib/api';
+import {
+  CUSTOM_TEMPLATE_ID,
+  applyErrorTemplate,
+  isConnectionTemplateId,
+} from '../lib/error-template-apply';
 import {
   HEADER_LINE_SEP,
   buildRequestMatch,
@@ -26,6 +36,11 @@ const URL_TYPES: Array<{ value: UrlPatternType; label: string }> = [
   { value: 'regex', label: '正则' },
 ];
 const LOCALES = ['zh_CN', 'en', 'ja', 'ko', 'de', 'fr'];
+const TEMPLATE_GROUPS: Array<{ category: ErrorTemplateCategory; label: string }> = [
+  { category: 'http-4xx', label: '── 4XX 客户端错误 ──' },
+  { category: 'http-5xx', label: '── 5XX 服务端错误 ──' },
+  { category: 'connection', label: '── 连接异常 ──' },
+];
 const SNIPPETS = [
   { label: 'now', text: '{{now:iso}}' },
   { label: 'uuid', text: '{{uuid}}' },
@@ -75,6 +90,30 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
   const [preview, setPreview] = useState('');
   const [previewWarnings, setPreviewWarnings] = useState<string[]>([]);
   const [error, setError] = useState('');
+  const [selectedTemplateId, setSelectedTemplateId] = useState(CUSTOM_TEMPLATE_ID);
+
+  // 连接级模板下不会有响应可言，因此禁用状态码 / 响应体；用户手动取消勾选「网络异常」后重新可编辑。
+  const connectionOnly = neEnabled && isConnectionTemplateId(selectedTemplateId);
+
+  /** 切换错误模板：把模板内容预填进现有字段。选回「无（自定义）」只清标记，不动已填值。 */
+  const selectTemplate = (id: string) => {
+    setSelectedTemplateId(id);
+    const template = findErrorTemplate(id);
+    if (!template) return;
+    const next = applyErrorTemplate(
+      { status, body, respHeadersText, neEnabled, neProbability, neType },
+      template,
+    );
+    setStatus(next.status);
+    setBody(next.body);
+    setRespHeadersText(next.respHeadersText);
+    setNeEnabled(next.neEnabled);
+    setNeProbability(next.neProbability);
+    setNeType(next.neType);
+  };
+
+  /** 手工改动模板预填过的字段后，下拉回到「无（自定义）」，但保留用户已填入的值。 */
+  const clearTemplate = () => setSelectedTemplateId(CUSTOM_TEMPLATE_ID);
 
   const buildAction = (): RuleAction => {
     const action: RuleAction = {
@@ -192,11 +231,28 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
           <label>请求体包含</label>
           <input value={bodyContains} onChange={(e) => setBodyContains(e.target.value)} />
           <label>响应状态码</label>
-          <input type="number" value={status} onChange={(e) => setStatus(Number(e.target.value))} />
+          <input
+            type="number"
+            value={status}
+            disabled={connectionOnly}
+            onChange={(e) => {
+              setStatus(Number(e.target.value));
+              clearTemplate();
+            }}
+          />
           <label>响应头（每行 k: v）</label>
           <textarea rows={2} value={respHeadersText} onChange={(e) => setRespHeadersText(e.target.value)} />
           <label>响应体</label>
-          <textarea rows={8} value={body} onChange={(e) => setBody(e.target.value)} placeholder='{"code":0}' />
+          <textarea
+            rows={8}
+            value={body}
+            disabled={connectionOnly}
+            onChange={(e) => {
+              setBody(e.target.value);
+              clearTemplate();
+            }}
+            placeholder='{"code":0}'
+          />
         </div>
 
         <details className="form-section" open>
@@ -230,6 +286,17 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
         <details className="form-section" open>
           <summary>行为模拟</summary>
           <div className="form-grid">
+            <label>错误模板</label>
+            <select value={selectedTemplateId} onChange={(e) => selectTemplate(e.target.value)}>
+              <option value={CUSTOM_TEMPLATE_ID}>无（自定义）</option>
+              {TEMPLATE_GROUPS.map((group) => (
+                <optgroup key={group.category} label={group.label}>
+                  {ERROR_TEMPLATES.filter((t) => t.category === group.category).map((t) => (
+                    <option key={t.id} value={t.id}>{t.label}</option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
             <label>延迟（ms）</label>
             <input
               type="number"
@@ -256,10 +323,19 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
                   max={100}
                   step={0.1}
                   value={neProbability}
-                  onChange={(e) => setNeProbability(e.target.value === '' ? '' : Number(e.target.value))}
+                  onChange={(e) => {
+                    setNeProbability(e.target.value === '' ? '' : Number(e.target.value));
+                    clearTemplate();
+                  }}
                 />
                 <label>异常类型</label>
-                <select value={neType} onChange={(e) => setNeType(e.target.value as NetworkErrorType)}>
+                <select
+                  value={neType}
+                  onChange={(e) => {
+                    setNeType(e.target.value as NetworkErrorType);
+                    clearTemplate();
+                  }}
+                >
                   {NETWORK_ERROR_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
                 </select>
                 {neType === 'HTTP_STATUS' && (
