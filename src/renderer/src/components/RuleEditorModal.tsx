@@ -2,7 +2,6 @@ import { useState } from 'react';
 import {
   DELAY_MS_MAX,
   NETWORK_ERROR_TYPES,
-  type HeaderRow,
   type HttpMethod,
   type MockRule,
   type NetworkErrorType,
@@ -12,6 +11,13 @@ import {
   type UrlPatternType,
 } from '../../../shared/types';
 import { api } from '../lib/api';
+import {
+  HEADER_LINE_SEP,
+  buildRequestMatch,
+  formatLines,
+  legacyRequestEditorText,
+  parseLines,
+} from '../lib/rule-match-edit';
 
 const METHODS: HttpMethod[] = ['ANY', 'GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'];
 const URL_TYPES: Array<{ value: UrlPatternType; label: string }> = [
@@ -29,28 +35,6 @@ const SNIPPETS = [
   { label: 'faker.internet.email', text: '{{faker.internet.email}}' },
 ];
 
-function parseLines(text: string, sep: string): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const line of text.split('\n')) {
-    const idx = line.indexOf(sep);
-    if (idx > 0) out[line.slice(0, idx).trim()] = line.slice(idx + sep.length).trim();
-  }
-  return out;
-}
-
-function formatLines(map: Record<string, string> | undefined, sep: string): string {
-  return Object.entries(map ?? {})
-    .map(([k, v]) => `${k}${sep}${v}`)
-    .join('\n');
-}
-
-function toHeaderRecord(
-  headers: Record<string, string> | HeaderRow[] | undefined,
-): Record<string, string> | undefined {
-  if (!headers || !Array.isArray(headers)) return headers;
-  return Object.fromEntries(headers.filter((h) => h.enabled).map((h) => [h.name, h.value]));
-}
-
 interface Props {
   initial: MockRule | null;
   draft?: RuleInput;
@@ -61,15 +45,21 @@ interface Props {
 export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Props) {
   // initial（编辑现有规则）优先；新建时可由 draft（抓包转规则）预填。两者不会同时出现。
   const seed = initial ?? draft ?? null;
+  // 打开时的请求匹配快照：保存时据此判断「请求头 / 请求体包含」是否真被用户改过，
+  // 未改过的输入框不能把已迁移的 HeaderRow[] / body 规则降级成纯文本形态。
+  const [opened] = useState(() => ({
+    match: seed?.match,
+    ...legacyRequestEditorText(seed?.match),
+  }));
   const [name, setName] = useState(seed?.name ?? '');
   const [urlType, setUrlType] = useState<UrlPatternType>(seed?.match.urlType ?? 'wildcard');
   const [urlPattern, setUrlPattern] = useState(seed?.match.urlPattern ?? '');
   const [method, setMethod] = useState<HttpMethod>(seed?.match.method ?? 'ANY');
   const [queryText, setQueryText] = useState(formatLines(seed?.match.query, '='));
-  const [headersText, setHeadersText] = useState(formatLines(toHeaderRecord(seed?.match.headers), ': '));
-  const [bodyContains, setBodyContains] = useState(seed?.match.bodyContains ?? '');
+  const [headersText, setHeadersText] = useState(opened.headersText);
+  const [bodyContains, setBodyContains] = useState(opened.bodyContainsText);
   const [status, setStatus] = useState(seed?.action.status ?? 200);
-  const [respHeadersText, setRespHeadersText] = useState(formatLines(seed?.action.headers, ': '));
+  const [respHeadersText, setRespHeadersText] = useState(formatLines(seed?.action.headers, HEADER_LINE_SEP));
   const [body, setBody] = useState(seed?.action.body ?? '');
 
   const [delayMs, setDelayMs] = useState<number | ''>(seed?.action.delayMs ?? '');
@@ -89,7 +79,7 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
   const buildAction = (): RuleAction => {
     const action: RuleAction = {
       status,
-      headers: { 'content-type': 'application/json', ...parseLines(respHeadersText, ': ') },
+      headers: { 'content-type': 'application/json', ...parseLines(respHeadersText, HEADER_LINE_SEP) },
       body,
     };
     if (delayMs !== '') action.delayMs = delayMs;
@@ -116,7 +106,13 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
       return;
     }
     const query = parseLines(queryText, '=');
-    const headers = parseLines(headersText, ': ');
+    const request = buildRequestMatch({
+      source: opened.match,
+      initialHeadersText: opened.headersText,
+      headersText,
+      initialBodyContainsText: opened.bodyContainsText,
+      bodyContainsText: bodyContains,
+    });
     const action = buildAction();
     try {
       await api.rulesValidate(action);
@@ -132,8 +128,7 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
         urlPattern,
         method,
         query: Object.keys(query).length ? query : undefined,
-        headers: Object.keys(headers).length ? headers : undefined,
-        bodyContains: bodyContains || undefined,
+        ...request,
       },
       action,
     };
