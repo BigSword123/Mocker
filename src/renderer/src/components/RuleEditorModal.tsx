@@ -1,16 +1,37 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   DELAY_MS_MAX,
   NETWORK_ERROR_TYPES,
+  type BodyMatchStrategy,
+  type BodyMode,
+  type HeaderRow,
   type HttpMethod,
   type MockRule,
   type NetworkErrorType,
   type RenderContext,
   type RuleAction,
+  type RuleBody,
   type RuleInput,
   type UrlPatternType,
 } from '../../../shared/types';
+import {
+  ERROR_TEMPLATES,
+  findById as findErrorTemplate,
+  type ErrorTemplateCategory,
+} from '../../../shared/error-templates';
 import { api } from '../lib/api';
+import {
+  CUSTOM_TEMPLATE_ID,
+  applyErrorTemplate,
+  isConnectionTemplateId,
+  responseStatusError,
+} from '../lib/error-template-apply';
+import {
+  formatLines,
+  parseLines,
+} from '../lib/rule-match-edit';
+import EditableTable from './EditableTable';
+import FakerCatalogModal from './FakerCatalogModal';
 
 const METHODS: HttpMethod[] = ['ANY', 'GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'];
 const URL_TYPES: Array<{ value: UrlPatternType; label: string }> = [
@@ -19,6 +40,11 @@ const URL_TYPES: Array<{ value: UrlPatternType; label: string }> = [
   { value: 'regex', label: '正则' },
 ];
 const LOCALES = ['zh_CN', 'en', 'ja', 'ko', 'de', 'fr'];
+const TEMPLATE_GROUPS: Array<{ category: ErrorTemplateCategory; label: string }> = [
+  { category: 'http-4xx', label: '── 4XX 客户端错误 ──' },
+  { category: 'http-5xx', label: '── 5XX 服务端错误 ──' },
+  { category: 'connection', label: '── 连接异常 ──' },
+];
 const SNIPPETS = [
   { label: 'now', text: '{{now:iso}}' },
   { label: 'uuid', text: '{{uuid}}' },
@@ -27,21 +53,9 @@ const SNIPPETS = [
   { label: 'faker.person.firstName', text: '{{faker.person.firstName}}' },
   { label: 'faker.internet.email', text: '{{faker.internet.email}}' },
 ];
-
-function parseLines(text: string, sep: string): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const line of text.split('\n')) {
-    const idx = line.indexOf(sep);
-    if (idx > 0) out[line.slice(0, idx).trim()] = line.slice(idx + sep.length).trim();
-  }
-  return out;
-}
-
-function formatLines(map: Record<string, string> | undefined, sep: string): string {
-  return Object.entries(map ?? {})
-    .map(([k, v]) => `${k}${sep}${v}`)
-    .join('\n');
-}
+// 无障碍关联用的固定 id：Modal 同一时刻最多一个实例，不会重复。
+const TEMPLATE_SELECT_ID = 'rule-error-template';
+const CONNECTION_NOTE_ID = 'rule-connection-only-note';
 
 interface Props {
   initial: MockRule | null;
@@ -51,17 +65,43 @@ interface Props {
 }
 
 export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Props) {
-  // initial（编辑现有规则）优先；新建时可由 draft（抓包转规则）预填。两者不会同时出现。
+  // initial（編集现有规则）优先；新建时可由 draft（抓包转规则）预填。两者不会同时出现。
   const seed = initial ?? draft ?? null;
   const [name, setName] = useState(seed?.name ?? '');
   const [urlType, setUrlType] = useState<UrlPatternType>(seed?.match.urlType ?? 'wildcard');
   const [urlPattern, setUrlPattern] = useState(seed?.match.urlPattern ?? '');
   const [method, setMethod] = useState<HttpMethod>(seed?.match.method ?? 'ANY');
   const [queryText, setQueryText] = useState(formatLines(seed?.match.query, '='));
-  const [headersText, setHeadersText] = useState(formatLines(seed?.match.headers, ': '));
-  const [bodyContains, setBodyContains] = useState(seed?.match.bodyContains ?? '');
+  const [headersRows, setHeadersRows] = useState<HeaderRow[]>(() => {
+    if (Array.isArray(seed?.match.headers)) return seed.match.headers;
+    if (seed?.match.headers && typeof seed.match.headers === 'object') {
+      return Object.entries(seed.match.headers as Record<string, string>).map(([name, value]) => ({
+        enabled: true,
+        name,
+        value,
+        description: '',
+      }));
+    }
+    return [{ enabled: true, name: '', value: '', description: '' }];
+  });
+  const seedBody: RuleBody = seed?.match.body ?? {
+    mode: seed?.match.bodyContains ? 'raw' : 'none',
+    raw: seed?.match.bodyContains ?? '',
+    matchStrategy: 'contains',
+  };
+  const [bodyRule, setBodyRule] = useState<RuleBody>(seedBody);
   const [status, setStatus] = useState(seed?.action.status ?? 200);
-  const [respHeadersText, setRespHeadersText] = useState(formatLines(seed?.action.headers, ': '));
+  const [respHeadersRows, setRespHeadersRows] = useState<HeaderRow[]>(() => {
+    if (seed?.action.headers) {
+      return Object.entries(seed.action.headers).map(([name, value]) => ({
+        enabled: true,
+        name,
+        value,
+        description: '',
+      }));
+    }
+    return [{ enabled: true, name: '', value: '', description: '' }];
+  });
   const [body, setBody] = useState(seed?.action.body ?? '');
 
   const [delayMs, setDelayMs] = useState<number | ''>(seed?.action.delayMs ?? '');
@@ -76,12 +116,49 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
   );
   const [preview, setPreview] = useState('');
   const [previewWarnings, setPreviewWarnings] = useState<string[]>([]);
+  const [fakerOpen, setFakerOpen] = useState(false);
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
   const [error, setError] = useState('');
+  const [selectedTemplateId, setSelectedTemplateId] = useState(CUSTOM_TEMPLATE_ID);
+
+  // 连接级模板下不会有响应可言，因此禁用状态码 / 响应体；用户手动取消勾选「网络异常」后重新可编辑。
+  const connectionOnly = neEnabled && isConnectionTemplateId(selectedTemplateId);
+
+  /** 切换错误模板：把模板内容预填进现有字段。选回「无（自定义）」只清标记，不动已填值。 */
+  const selectTemplate = (id: string) => {
+    setSelectedTemplateId(id);
+    const template = findErrorTemplate(id);
+    if (!template) return;
+    const next = applyErrorTemplate(
+      { status, body, respHeadersRows, neEnabled, neProbability, neType },
+      template,
+    );
+    setStatus(next.status);
+    setBody(next.body);
+    setRespHeadersRows(next.respHeadersRows);
+    setNeEnabled(next.neEnabled);
+    setNeProbability(next.neProbability);
+    setNeType(next.neType);
+  };
+
+  /**
+   * 手工改动模板会预填的任一字段（状态码 / 响应体 / 响应头 / 网络异常开关、概率、类型）后，
+   * 下拉回到「无（自定义）」，但保留用户已填入的值——此时的响应已不再是模板所描述的那个。
+   */
+  const clearTemplate = () => setSelectedTemplateId(CUSTOM_TEMPLATE_ID);
 
   const buildAction = (): RuleAction => {
+    const respHeaders: Record<string, string> = {};
+    const hasContentType = respHeadersRows.some(
+      (r) => r.enabled && r.name && r.name.toLowerCase() === 'content-type',
+    );
+    if (!hasContentType) respHeaders['content-type'] = 'application/json';
+    for (const r of respHeadersRows.filter((r) => r.enabled && r.name)) {
+      respHeaders[r.name] = r.value;
+    }
     const action: RuleAction = {
       status,
-      headers: { 'content-type': 'application/json', ...parseLines(respHeadersText, ': ') },
+      headers: respHeaders,
       body,
     };
     if (delayMs !== '') action.delayMs = delayMs;
@@ -103,12 +180,12 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
       setError('URL 匹配模式不能为空');
       return;
     }
-    if (!(Number.isInteger(status) && status >= 100 && status <= 999)) {
-      setError('响应状态码必须是 100-999 的整数');
+    const statusError = responseStatusError(status, connectionOnly);
+    if (statusError) {
+      setError(statusError);
       return;
     }
     const query = parseLines(queryText, '=');
-    const headers = parseLines(headersText, ': ');
     const action = buildAction();
     try {
       await api.rulesValidate(action);
@@ -116,6 +193,21 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
       setError(String(err));
       return;
     }
+    const matchBody: RuleBody | undefined =
+      bodyRule.mode === 'none'
+        ? undefined
+        : bodyRule.mode === 'raw'
+          ? {
+              mode: 'raw',
+              raw: bodyRule.raw,
+              rawContentType: bodyRule.rawContentType,
+              matchStrategy: bodyRule.matchStrategy,
+            }
+          : {
+              mode: bodyRule.mode,
+              form: bodyRule.form?.filter((r) => r.name || r.value),
+            };
+
     const input: RuleInput = {
       name: name.trim() || urlPattern,
       enabled: initial?.enabled ?? true,
@@ -124,8 +216,8 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
         urlPattern,
         method,
         query: Object.keys(query).length ? query : undefined,
-        headers: Object.keys(headers).length ? headers : undefined,
-        bodyContains: bodyContains || undefined,
+        headers: headersRows.some((r) => r.name || r.value) ? headersRows : undefined,
+        body: matchBody,
       },
       action,
     };
@@ -162,7 +254,15 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
     }
   };
 
-  const insertSnippet = (text: string) => setBody((prev) => prev + text);
+  const insertSnippet = (snippet: string) => {
+    setBody((prev) => {
+      const ta = bodyRef.current;
+      if (!ta) return prev + snippet;
+      const s = ta.selectionStart;
+      const e = ta.selectionEnd;
+      return prev.slice(0, s) + snippet + prev.slice(e);
+    });
+  };
 
   return (
     <div className="modal-mask" onClick={onClose}>
@@ -184,16 +284,106 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
           </select>
           <label>Query（每行 k=v）</label>
           <textarea rows={2} value={queryText} onChange={(e) => setQueryText(e.target.value)} />
-          <label>请求头（每行 k: v）</label>
-          <textarea rows={2} value={headersText} onChange={(e) => setHeadersText(e.target.value)} />
-          <label>请求体包含</label>
-          <input value={bodyContains} onChange={(e) => setBodyContains(e.target.value)} />
+          <label>请求头</label>
+          <EditableTable rows={headersRows} onChange={setHeadersRows} ariaLabel="请求头" />
+          <label>请求体</label>
+          <div className="body-tabs">
+            {(['none', 'raw', 'form-data', 'urlencoded'] as BodyMode[]).map((m) => (
+              <button
+                key={m}
+                type="button"
+                className={`tab ${bodyRule.mode === m ? 'active' : ''}`}
+                onClick={() =>
+                  setBodyRule({
+                    ...bodyRule,
+                    mode: m,
+                    form: bodyRule.form ?? [{ enabled: true, name: '', value: '', description: '' }],
+                  })
+                }
+              >
+                {m === 'none' ? '无' : m === 'raw' ? 'raw' : m === 'form-data' ? 'form-data' : 'x-www-form'}
+              </button>
+            ))}
+          </div>
+          {bodyRule.mode === 'none' && <div className="hint">此规则不匹配请求体</div>}
+          {bodyRule.mode === 'raw' && (
+            <>
+              <div className="body-options">
+                <label>
+                  内容类型
+                  <input
+                    value={bodyRule.rawContentType ?? 'application/json'}
+                    onChange={(e) => setBodyRule({ ...bodyRule, rawContentType: e.target.value })}
+                  />
+                </label>
+                <label>
+                  匹配策略
+                  <select
+                    value={bodyRule.matchStrategy ?? 'contains'}
+                    onChange={(e) =>
+                      setBodyRule({ ...bodyRule, matchStrategy: e.target.value as BodyMatchStrategy })
+                    }
+                  >
+                    <option value="contains">包含</option>
+                    <option value="equals">完全相等</option>
+                    <option value="json-deep">JSON 深度相等</option>
+                  </select>
+                </label>
+              </div>
+              <textarea
+                rows={8}
+                value={bodyRule.raw ?? ''}
+                onChange={(e) => setBodyRule({ ...bodyRule, raw: e.target.value })}
+                placeholder='{"keyword": "test"}'
+              />
+            </>
+          )}
+          {(bodyRule.mode === 'form-data' || bodyRule.mode === 'urlencoded') && (
+            <EditableTable
+              rows={bodyRule.form ?? [{ enabled: true, name: '', value: '', description: '' }]}
+              onChange={(form) => setBodyRule({ ...bodyRule, form })}
+              columns={{ description: false }}
+              ariaLabel="请求体表单"
+            />
+          )}
           <label>响应状态码</label>
-          <input type="number" value={status} onChange={(e) => setStatus(Number(e.target.value))} />
-          <label>响应头（每行 k: v）</label>
-          <textarea rows={2} value={respHeadersText} onChange={(e) => setRespHeadersText(e.target.value)} />
+          <input
+            type="number"
+            value={status}
+            disabled={connectionOnly}
+            aria-describedby={connectionOnly ? CONNECTION_NOTE_ID : undefined}
+            onChange={(e) => {
+              setStatus(Number(e.target.value));
+              clearTemplate();
+            }}
+          />
+          <label>响应头</label>
+          <EditableTable
+            rows={respHeadersRows}
+            onChange={(rows) => {
+              setRespHeadersRows(rows);
+              clearTemplate();
+            }}
+            ariaLabel="响应头"
+          />
           <label>响应体</label>
-          <textarea rows={8} value={body} onChange={(e) => setBody(e.target.value)} placeholder='{"code":0}' />
+          <textarea
+            ref={bodyRef}
+            rows={8}
+            value={body}
+            disabled={connectionOnly}
+            aria-describedby={connectionOnly ? CONNECTION_NOTE_ID : undefined}
+            onChange={(e) => {
+              setBody(e.target.value);
+              clearTemplate();
+            }}
+            placeholder='{"code":0}'
+          />
+          {connectionOnly && (
+            <p className="form-note" id={CONNECTION_NOTE_ID}>
+              连接异常模板会让请求在连接层失败，不返回任何响应，因此状态码与响应体暂不可编辑；取消勾选「网络异常」即可恢复。
+            </p>
+          )}
         </div>
 
         <details className="form-section" open>
@@ -210,6 +400,7 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
                   +{s.label}
                 </button>
               ))}
+              <button type="button" onClick={() => setFakerOpen(true)}>Faker 速查…</button>
             </div>
             <label>渲染预览</label>
             <div>
@@ -227,6 +418,21 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
         <details className="form-section" open>
           <summary>行为模拟</summary>
           <div className="form-grid">
+            <label htmlFor={TEMPLATE_SELECT_ID}>错误模板</label>
+            <select
+              id={TEMPLATE_SELECT_ID}
+              value={selectedTemplateId}
+              onChange={(e) => selectTemplate(e.target.value)}
+            >
+              <option value={CUSTOM_TEMPLATE_ID}>无（自定义）</option>
+              {TEMPLATE_GROUPS.map((group) => (
+                <optgroup key={group.category} label={group.label}>
+                  {ERROR_TEMPLATES.filter((t) => t.category === group.category).map((t) => (
+                    <option key={t.id} value={t.id}>{t.label}</option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
             <label>延迟（ms）</label>
             <input
               type="number"
@@ -240,7 +446,10 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
               <input
                 type="checkbox"
                 checked={neEnabled}
-                onChange={(e) => setNeEnabled(e.target.checked)}
+                onChange={(e) => {
+                  setNeEnabled(e.target.checked);
+                  clearTemplate();
+                }}
               />
               命中时按概率触发网络异常
             </label>
@@ -253,10 +462,19 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
                   max={100}
                   step={0.1}
                   value={neProbability}
-                  onChange={(e) => setNeProbability(e.target.value === '' ? '' : Number(e.target.value))}
+                  onChange={(e) => {
+                    setNeProbability(e.target.value === '' ? '' : Number(e.target.value));
+                    clearTemplate();
+                  }}
                 />
                 <label>异常类型</label>
-                <select value={neType} onChange={(e) => setNeType(e.target.value as NetworkErrorType)}>
+                <select
+                  value={neType}
+                  onChange={(e) => {
+                    setNeType(e.target.value as NetworkErrorType);
+                    clearTemplate();
+                  }}
+                >
                   {NETWORK_ERROR_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
                 </select>
                 {neType === 'HTTP_STATUS' && (
@@ -279,6 +497,11 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
           <button onClick={onClose}>取消</button>
         </div>
       </div>
+      <FakerCatalogModal
+        open={fakerOpen}
+        onClose={() => setFakerOpen(false)}
+        onInsert={insertSnippet}
+      />
     </div>
   );
 }

@@ -63,3 +63,80 @@ test('saving out-of-range delay shows server-side delayMs error', async () => {
   await expect(win.locator('.modal h2')).toHaveText('新建规则');
   await closeRuleModal();
 });
+
+test('error template 404 prefills status and body', async () => {
+  await openNewRuleModal();
+  await win.locator('#rule-error-template').selectOption('http-404');
+  const statusInput = win.locator('.form-grid label:has-text("响应状态码") + input');
+  await expect(statusInput).toHaveValue('404');
+  const bodyTextarea = win.locator('textarea[placeholder=\'{"code":0}\']');
+  await expect(bodyTextarea).toContainText('Not Found');
+  await closeRuleModal();
+});
+
+test('connection template disables response fields', async () => {
+  await openNewRuleModal();
+  await win.locator('#rule-error-template').selectOption('conn-econnreset');
+  const statusInput = win.locator('.form-grid label:has-text("响应状态码") + input');
+  const bodyTextarea = win.locator('textarea[placeholder=\'{"code":0}\']');
+  await expect(statusInput).toBeDisabled();
+  await expect(bodyTextarea).toBeDisabled();
+  await expect(win.locator('#rule-connection-only-note')).toBeVisible();
+  await win.locator('#rule-error-template').selectOption('custom');
+  await expect(statusInput).toBeEnabled();
+  await expect(bodyTextarea).toBeEnabled();
+  await closeRuleModal();
+});
+
+test('manual edit resets error template to custom', async () => {
+  await openNewRuleModal();
+  await win.locator('#rule-error-template').selectOption('http-404');
+  const statusInput = win.locator('.form-grid label:has-text("响应状态码") + input');
+  await statusInput.fill('418');
+  await expect(win.locator('#rule-error-template')).toHaveValue('custom');
+  await closeRuleModal();
+});
+
+test('faker catalog modal inserts snippet', async () => {
+  await openNewRuleModal();
+  await win.getByRole('button', { name: 'Faker 速查…' }).click();
+  await win.getByPlaceholder('搜索方法或关键词').fill('email');
+  await win.getByRole('button', { name: '插入' }).first().click();
+  const body = win.locator('textarea[placeholder=\'{"code":0}\']');
+  await expect(body).toHaveValue(/faker\.internet\.email/);
+  await win.locator('.faker-modal .icon-btn').click();
+  await closeRuleModal();
+});
+
+test('editable header table adds and deletes rows', async () => {
+  await openNewRuleModal();
+  const table = win.locator('table[aria-label="请求头"]');
+  await table.getByPlaceholder('Name').first().fill('X-Foo');
+  await table.getByPlaceholder('Value').first().fill('bar');
+  // Auto-appends empty row
+  await expect(table.getByPlaceholder('Name')).toHaveCount(2);
+  // Delete first row
+  await table.locator('tr').first().getByRole('button', { name: '删除行' }).click();
+  await expect(table.getByPlaceholder('Name').first()).toHaveValue('');
+  await closeRuleModal();
+});
+
+test('body tabs switch to form-data mode', async () => {
+  await openNewRuleModal();
+  await win.getByRole('button', { name: 'form-data', exact: true }).click();
+  const table = win.locator('table[aria-label="请求体表单"]');
+  await expect(table).toBeVisible();
+  await table.getByPlaceholder('Name').first().fill('user');
+  await table.getByPlaceholder('Value').first().fill('alice');
+  await closeRuleModal();
+});
+
+test('body tabs raw mode with json-deep strategy', async () => {
+  await openNewRuleModal();
+  await win.getByRole('button', { name: 'raw', exact: true }).click();
+  await win.getByLabel('匹配策略').selectOption('json-deep');
+  const textarea = win.locator('textarea[placeholder=\'{"keyword": "test"}\']');
+  await textarea.fill('{"id":1}');
+  await closeRuleModal();
+});
+

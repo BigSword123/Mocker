@@ -62,6 +62,11 @@ describe('captureToRuleInput', () => {
     expect(input.action.headers).toEqual({ 'content-type': 'text/plain' });
   });
 
+  it('match.headers is undefined (no prefill on the match side)', () => {
+    const out = captureToRuleInput(event());
+    expect(out.match.headers).toBeUndefined();
+  });
+
   it('maps a non-standard method to ANY', () => {
     expect(captureToRuleInput(event({ method: 'CONNECT' })).match.method).toBe('ANY');
   });

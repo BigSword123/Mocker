@@ -1,13 +1,32 @@
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'HEAD' | 'OPTIONS' | 'ANY';
 export type UrlPatternType = 'exact' | 'wildcard' | 'regex';
 
+export interface HeaderRow {
+  enabled: boolean;
+  name: string;
+  value: string;
+  description?: string;
+}
+
+export type BodyMode = 'none' | 'raw' | 'form-data' | 'urlencoded';
+export type BodyMatchStrategy = 'contains' | 'equals' | 'json-deep';
+
+export interface RuleBody {
+  mode: BodyMode;
+  raw?: string;
+  rawContentType?: string;
+  form?: HeaderRow[];
+  matchStrategy?: BodyMatchStrategy;
+}
+
 export interface RuleMatch {
   urlType: UrlPatternType;
   urlPattern: string;
   method: HttpMethod;
   query?: Record<string, string>;
-  headers?: Record<string, string>;
+  headers?: Record<string, string> | HeaderRow[];
   bodyContains?: string;
+  body?: RuleBody;
 }
 
 export interface MockRule {
