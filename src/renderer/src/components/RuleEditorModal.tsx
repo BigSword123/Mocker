@@ -20,10 +20,12 @@ import {
   CUSTOM_TEMPLATE_ID,
   applyErrorTemplate,
   isConnectionTemplateId,
+  responseStatusError,
 } from '../lib/error-template-apply';
 import {
   HEADER_LINE_SEP,
   buildRequestMatch,
+  buildResponseHeaders,
   formatLines,
   legacyRequestEditorText,
   parseLines,
@@ -49,6 +51,9 @@ const SNIPPETS = [
   { label: 'faker.person.firstName', text: '{{faker.person.firstName}}' },
   { label: 'faker.internet.email', text: '{{faker.internet.email}}' },
 ];
+// 无障碍关联用的固定 id：Modal 同一时刻最多一个实例，不会重复。
+const TEMPLATE_SELECT_ID = 'rule-error-template';
+const CONNECTION_NOTE_ID = 'rule-connection-only-note';
 
 interface Props {
   initial: MockRule | null;
@@ -112,13 +117,16 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
     setNeType(next.neType);
   };
 
-  /** 手工改动模板预填过的字段后，下拉回到「无（自定义）」，但保留用户已填入的值。 */
+  /**
+   * 手工改动模板会预填的任一字段（状态码 / 响应体 / 响应头 / 网络异常开关、概率、类型）后，
+   * 下拉回到「无（自定义）」，但保留用户已填入的值——此时的响应已不再是模板所描述的那个。
+   */
   const clearTemplate = () => setSelectedTemplateId(CUSTOM_TEMPLATE_ID);
 
   const buildAction = (): RuleAction => {
     const action: RuleAction = {
       status,
-      headers: { 'content-type': 'application/json', ...parseLines(respHeadersText, HEADER_LINE_SEP) },
+      headers: buildResponseHeaders(respHeadersText),
       body,
     };
     if (delayMs !== '') action.delayMs = delayMs;
@@ -140,8 +148,9 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
       setError('URL 匹配模式不能为空');
       return;
     }
-    if (!(Number.isInteger(status) && status >= 100 && status <= 999)) {
-      setError('响应状态码必须是 100-999 的整数');
+    const statusError = responseStatusError(status, connectionOnly);
+    if (statusError) {
+      setError(statusError);
       return;
     }
     const query = parseLines(queryText, '=');
@@ -235,24 +244,38 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
             type="number"
             value={status}
             disabled={connectionOnly}
+            aria-describedby={connectionOnly ? CONNECTION_NOTE_ID : undefined}
             onChange={(e) => {
               setStatus(Number(e.target.value));
               clearTemplate();
             }}
           />
           <label>响应头（每行 k: v）</label>
-          <textarea rows={2} value={respHeadersText} onChange={(e) => setRespHeadersText(e.target.value)} />
+          <textarea
+            rows={2}
+            value={respHeadersText}
+            onChange={(e) => {
+              setRespHeadersText(e.target.value);
+              clearTemplate();
+            }}
+          />
           <label>响应体</label>
           <textarea
             rows={8}
             value={body}
             disabled={connectionOnly}
+            aria-describedby={connectionOnly ? CONNECTION_NOTE_ID : undefined}
             onChange={(e) => {
               setBody(e.target.value);
               clearTemplate();
             }}
             placeholder='{"code":0}'
           />
+          {connectionOnly && (
+            <p className="form-note" id={CONNECTION_NOTE_ID}>
+              连接异常模板会让请求在连接层失败，不返回任何响应，因此状态码与响应体暂不可编辑；取消勾选「网络异常」即可恢复。
+            </p>
+          )}
         </div>
 
         <details className="form-section" open>
@@ -286,8 +309,12 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
         <details className="form-section" open>
           <summary>行为模拟</summary>
           <div className="form-grid">
-            <label>错误模板</label>
-            <select value={selectedTemplateId} onChange={(e) => selectTemplate(e.target.value)}>
+            <label htmlFor={TEMPLATE_SELECT_ID}>错误模板</label>
+            <select
+              id={TEMPLATE_SELECT_ID}
+              value={selectedTemplateId}
+              onChange={(e) => selectTemplate(e.target.value)}
+            >
               <option value={CUSTOM_TEMPLATE_ID}>无（自定义）</option>
               {TEMPLATE_GROUPS.map((group) => (
                 <optgroup key={group.category} label={group.label}>
@@ -310,7 +337,10 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
               <input
                 type="checkbox"
                 checked={neEnabled}
-                onChange={(e) => setNeEnabled(e.target.checked)}
+                onChange={(e) => {
+                  setNeEnabled(e.target.checked);
+                  clearTemplate();
+                }}
               />
               命中时按概率触发网络异常
             </label>

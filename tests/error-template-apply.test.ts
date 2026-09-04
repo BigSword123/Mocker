@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
   CUSTOM_TEMPLATE_ID,
+  RESPONSE_STATUS_MESSAGE,
   applyErrorTemplate,
   isConnectionTemplateId,
   mergeHeaderText,
+  responseStatusError,
   type ErrorTemplateFields,
 } from '../src/renderer/src/lib/error-template-apply';
+import { buildResponseHeaders } from '../src/renderer/src/lib/rule-match-edit';
 import { findById } from '../src/shared/error-templates';
 
 /** The editor state of a hand-authored rule: 200 + a JSON body and one custom response header. */
@@ -90,6 +93,62 @@ describe('applyErrorTemplate on an http template', () => {
   });
 });
 
+describe('an applied http template through the action-header serialisation', () => {
+  /** The `action.headers` a save would store after applying `id` to `respHeadersText`. */
+  function savedHeaders(respHeadersText: string, id: string): Record<string, string> {
+    const next = applyErrorTemplate(handAuthored({ respHeadersText }), template(id));
+    return buildResponseHeaders(next.respHeadersText);
+  }
+
+  it('stores the json content type the template guarantees', () => {
+    expect(savedHeaders('x-trace: abc', 'http-404')).toEqual({
+      'x-trace': 'abc',
+      'content-type': 'application/json',
+    });
+  });
+
+  it('stores a user content-type once, without a lowercase duplicate', () => {
+    expect(savedHeaders('Content-Type: text/xml', 'http-404')).toEqual({ 'Content-Type': 'text/xml' });
+  });
+
+  it('stores a user content-type once whatever its casing', () => {
+    expect(savedHeaders('CONTENT-TYPE: text/xml\nx-trace: abc', 'http-500')).toEqual({
+      'CONTENT-TYPE': 'text/xml',
+      'x-trace': 'abc',
+    });
+  });
+
+  it('stores the template retry-after next to the default content type', () => {
+    expect(savedHeaders('', 'http-429')).toEqual({
+      'retry-after': '60',
+      'content-type': 'application/json',
+    });
+  });
+});
+
+describe('an applied http template over duplicate header lines', () => {
+  it('rewrites every duplicate so the serialised value is the template one', () => {
+    const next = applyErrorTemplate(
+      handAuthored({ respHeadersText: 'Retry-After: 1\nretry-after: 2' }),
+      template('http-503'),
+    );
+    expect(next.respHeadersText).toBe('Retry-After: 30\nretry-after: 30\ncontent-type: application/json');
+    const headers = buildResponseHeaders(next.respHeadersText);
+    expect(Object.entries(headers).filter(([name]) => name.toLowerCase() === 'retry-after')).toEqual([
+      ['Retry-After', '30'],
+      ['retry-after', '30'],
+    ]);
+  });
+
+  it('rewrites duplicates of the same spelling too', () => {
+    expect(mergeHeaderText('a: 1\nb: 2\na: 3', { a: '9' })).toBe('a: 9\nb: 2\na: 9');
+  });
+
+  it('does not append an override that only duplicate lines carried', () => {
+    expect(mergeHeaderText('a: 1\na: 2', { a: '9' })).toBe('a: 9\na: 9');
+  });
+});
+
 describe('applyErrorTemplate on a connection template', () => {
   it('enables the network error at probability 100 with the template type', () => {
     const next = applyErrorTemplate(handAuthored(), template('conn-etimedout'));
@@ -125,6 +184,24 @@ describe('isConnectionTemplateId', () => {
     expect(isConnectionTemplateId('http-404')).toBe(false);
     expect(isConnectionTemplateId(CUSTOM_TEMPLATE_ID)).toBe(false);
     expect(isConnectionTemplateId('nope')).toBe(false);
+  });
+});
+
+describe('responseStatusError', () => {
+  it('accepts any status in the 100-999 range', () => {
+    for (const status of [100, 404, 999]) expect(responseStatusError(status, false), String(status)).toBeNull();
+  });
+
+  it('rejects a status outside the range or not an integer', () => {
+    for (const status of [0, 99, 1000, 404.5, Number.NaN]) {
+      expect(responseStatusError(status, false), String(status)).toBe(RESPONSE_STATUS_MESSAGE);
+    }
+  });
+
+  it('skips the check while a connection template disables the status input', () => {
+    for (const status of [0, 99, Number.NaN]) {
+      expect(responseStatusError(status, true), String(status)).toBeNull();
+    }
   });
 });
 

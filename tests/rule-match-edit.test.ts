@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  DEFAULT_RESPONSE_CONTENT_TYPE,
   buildRequestMatch,
+  buildResponseHeaders,
   legacyRequestEditorText,
   type LegacyRequestEdit,
 } from '../src/renderer/src/lib/rule-match-edit';
@@ -208,5 +210,37 @@ describe('buildRequestMatch for a new rule', () => {
 
   it('omits both constraints when nothing was typed', () => {
     expect(buildRequestMatch(untouched(undefined))).toEqual({});
+  });
+});
+
+describe('buildResponseHeaders', () => {
+  it('adds the default json content type when the text has none', () => {
+    expect(buildResponseHeaders('x-trace: abc')).toEqual({
+      'content-type': DEFAULT_RESPONSE_CONTENT_TYPE,
+      'x-trace': 'abc',
+    });
+  });
+
+  it('adds the default json content type to an empty textarea', () => {
+    expect(buildResponseHeaders('')).toEqual({ 'content-type': DEFAULT_RESPONSE_CONTENT_TYPE });
+  });
+
+  it('keeps a lowercase content-type the user set instead of the default', () => {
+    expect(buildResponseHeaders('content-type: text/plain')).toEqual({
+      'content-type': 'text/plain',
+    });
+  });
+
+  it('does not add a lowercase duplicate next to a differently cased content-type', () => {
+    expect(buildResponseHeaders('Content-Type: text/xml\nx-trace: abc')).toEqual({
+      'Content-Type': 'text/xml',
+      'x-trace': 'abc',
+    });
+  });
+
+  it('ignores lines the k: v convention cannot parse', () => {
+    expect(buildResponseHeaders('# note\nCONTENT-TYPE: text/csv')).toEqual({
+      'CONTENT-TYPE': 'text/csv',
+    });
   });
 });

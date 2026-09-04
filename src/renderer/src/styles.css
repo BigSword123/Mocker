@@ -4,7 +4,7 @@ button { cursor: pointer; background: #33343c; color: #e2e2e8; border: 1px solid
 button:hover { background: #3e3f49; }
 button.primary { background: #3b6ef6; border-color: #3b6ef6; color: #fff; }
 input, select, textarea { background: #26272e; color: #e2e2e8; border: 1px solid #4a4b55; border-radius: 6px; padding: 5px 8px; font-size: 13px; }
-input:disabled, select:disabled, textarea:disabled { color: #75767f; background: #22232a; cursor: not-allowed; }
+input:disabled, select:disabled, textarea:disabled { color: #9b9ca6; background: #22232a; cursor: not-allowed; }
 .app { display: flex; flex-direction: column; height: 100vh; }
 .status-bar { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-bottom: 1px solid #33343c; }
 .status-bar .spacer { flex: 1; }
@@ -47,6 +47,7 @@ table.kv .k { color: #8ab4ff; width: 200px; }
 .form-grid { display: grid; grid-template-columns: 120px 1fr; gap: 10px; align-items: center; max-width: 640px; }
 .form-grid label { color: #8a8b96; text-align: right; }
 .form-grid input, .form-grid select, .form-grid textarea { width: 100%; }
+.form-grid .form-note { grid-column: 2; color: #b9bac4; font-size: 12px; line-height: 1.5; }
 .rules-table { width: 100%; border-collapse: collapse; }
 .rules-table th, .rules-table td { border-bottom: 1px solid #33343c; padding: 8px 10px; text-align: left; }
 .rules-table .ops { white-space: nowrap; display: flex; gap: 6px; }

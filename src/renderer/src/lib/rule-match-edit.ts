@@ -20,6 +20,23 @@ export function formatLines(map: Record<string, string> | undefined, sep: string
     .join('\n');
 }
 
+/** The response content type the editor assumes when the rule does not set one. */
+export const DEFAULT_RESPONSE_CONTENT_TYPE = 'application/json';
+
+/**
+ * The `action.headers` of a save, from the `响应头` textarea text.
+ *
+ * A mock body is JSON unless stated otherwise, so an absent content type defaults to
+ * {@link DEFAULT_RESPONSE_CONTENT_TYPE}. HTTP header names are case-insensitive while a record's keys
+ * are not, so the default is skipped whenever *any* casing of `content-type` is present — adding a
+ * lowercase entry beside the user's `Content-Type` would send the header twice and let the wrong one win.
+ */
+export function buildResponseHeaders(text: string): Record<string, string> {
+  const headers = parseLines(text, HEADER_LINE_SEP);
+  const hasContentType = Object.keys(headers).some((name) => name.toLowerCase() === 'content-type');
+  return hasContentType ? headers : { 'content-type': DEFAULT_RESPONSE_CONTENT_TYPE, ...headers };
+}
+
 /**
  * The request-side constraints of a {@link RuleMatch}: the fields the plain-text editor can touch.
  */
