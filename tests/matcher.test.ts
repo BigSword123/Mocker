@@ -72,6 +72,23 @@ describe('matchRule', () => {
     expect(matchRule({ ...m, headers: { 'X-Token': 'zzz' } }, req())).toBe(false);
   });
 
+  it('matches headers given as HeaderRow[] and ignores disabled rows', () => {
+    const enabledMatch: RuleMatch = { ...base, headers: [{ enabled: true, name: 'X-Token', value: 'abc' }] };
+    expect(matchRule(enabledMatch, req())).toBe(true);
+
+    const disabledMismatch: RuleMatch = {
+      ...base,
+      headers: [
+        { enabled: true, name: 'X-Token', value: 'abc' },
+        { enabled: false, name: 'X-Token', value: 'zzz' },
+      ],
+    };
+    expect(matchRule(disabledMismatch, req())).toBe(true);
+
+    const enabledMismatch: RuleMatch = { ...base, headers: [{ enabled: true, name: 'X-Token', value: 'zzz' }] };
+    expect(matchRule(enabledMismatch, req())).toBe(false);
+  });
+
   it('matches body substring', () => {
     const m: RuleMatch = { ...base, bodyContains: '"id":1' };
     expect(matchRule(m, req({ body: '{"id":1,"x":2}' }))).toBe(true);

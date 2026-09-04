@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { RulesStore } from '../src/main/storage/rules-store';
-import type { RuleInput } from '../src/shared/types';
+import type { HeaderRow, RuleInput } from '../src/shared/types';
 
 let dir: string;
 
@@ -145,5 +145,43 @@ describe('RulesStore', () => {
     const listed = store.list()[0];
     listed.action.networkError!.probability = 0;
     expect(store.list()[0].action.networkError!.probability).toBe(50);
+  });
+
+  it('clones HeaderRow arrays and body form rows so mutating a listed rule cannot affect the store', async () => {
+    const store = new RulesStore(dir);
+    await store.load();
+    const withTables: RuleInput = {
+      name: 'tables',
+      enabled: true,
+      match: {
+        urlType: 'exact',
+        urlPattern: 'http://x.com/tables',
+        method: 'ANY',
+        headers: [{ enabled: true, name: 'X', value: 'a' }],
+        body: { mode: 'form-data', form: [{ enabled: true, name: 'f', value: '1' }] },
+      },
+      action: { status: 200, headers: {}, body: 'tables' },
+    };
+    await store.add(withTables);
+
+    const listed = store.list()[0];
+    expect(Array.isArray(listed.match.headers)).toBe(true);
+    expect(listed.match.headers).toEqual([{ enabled: true, name: 'X', value: 'a' }]);
+    expect(listed.match.body).toEqual({
+      mode: 'form-data',
+      form: [{ enabled: true, name: 'f', value: '1' }],
+    });
+
+    const listedHeaders = listed.match.headers as HeaderRow[];
+    listedHeaders[0].value = 'mutated';
+    listed.match.body!.mode = 'raw';
+    listed.match.body!.form![0].value = 'mutated';
+
+    const again = store.list()[0];
+    expect(again.match.headers).toEqual([{ enabled: true, name: 'X', value: 'a' }]);
+    expect(again.match.body).toEqual({
+      mode: 'form-data',
+      form: [{ enabled: true, name: 'f', value: '1' }],
+    });
   });
 });

@@ -12,7 +12,21 @@ function cloneRule(rule: MockRule): MockRule {
     match: {
       ...rule.match,
       ...(rule.match.query ? { query: { ...rule.match.query } } : {}),
-      ...(rule.match.headers ? { headers: { ...rule.match.headers } } : {}),
+      ...(rule.match.headers
+        ? {
+            headers: Array.isArray(rule.match.headers)
+              ? rule.match.headers.map((h) => ({ ...h }))
+              : { ...rule.match.headers },
+          }
+        : {}),
+      ...(rule.match.body
+        ? {
+            body: {
+              ...rule.match.body,
+              ...(rule.match.body.form ? { form: rule.match.body.form.map((h) => ({ ...h })) } : {}),
+            },
+          }
+        : {}),
     },
     action: {
       ...rule.action,
