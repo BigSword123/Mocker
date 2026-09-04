@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   DELAY_MS_MAX,
   NETWORK_ERROR_TYPES,
@@ -22,6 +22,7 @@ import {
   isConnectionTemplateId,
   responseStatusError,
 } from '../lib/error-template-apply';
+import FakerCatalogModal from './FakerCatalogModal';
 import {
   HEADER_LINE_SEP,
   buildRequestMatch,
@@ -94,6 +95,8 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
   );
   const [preview, setPreview] = useState('');
   const [previewWarnings, setPreviewWarnings] = useState<string[]>([]);
+  const [fakerOpen, setFakerOpen] = useState(false);
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
   const [error, setError] = useState('');
   const [selectedTemplateId, setSelectedTemplateId] = useState(CUSTOM_TEMPLATE_ID);
 
@@ -213,7 +216,15 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
     }
   };
 
-  const insertSnippet = (text: string) => setBody((prev) => prev + text);
+  const insertSnippet = (snippet: string) => {
+    setBody((prev) => {
+      const ta = bodyRef.current;
+      if (!ta) return prev + snippet;
+      const s = ta.selectionStart;
+      const e = ta.selectionEnd;
+      return prev.slice(0, s) + snippet + prev.slice(e);
+    });
+  };
 
   return (
     <div className="modal-mask" onClick={onClose}>
@@ -261,6 +272,7 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
           />
           <label>响应体</label>
           <textarea
+            ref={bodyRef}
             rows={8}
             value={body}
             disabled={connectionOnly}
@@ -292,6 +304,7 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
                   +{s.label}
                 </button>
               ))}
+              <button type="button" onClick={() => setFakerOpen(true)}>Faker 速查…</button>
             </div>
             <label>渲染预览</label>
             <div>
@@ -388,6 +401,11 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
           <button onClick={onClose}>取消</button>
         </div>
       </div>
+      <FakerCatalogModal
+        open={fakerOpen}
+        onClose={() => setFakerOpen(false)}
+        onInsert={insertSnippet}
+      />
     </div>
   );
 }
