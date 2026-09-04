@@ -56,7 +56,7 @@ export class RulesStore {
   }
 
   async load(): Promise<void> {
-    const raw = (await this.store.read()) as unknown[];
+    const raw: unknown = await this.store.read();
     const { rules, skipped, changed } = migrateRules(raw);
     this.rules = rules;
     if (skipped > 0) {
@@ -64,7 +64,8 @@ export class RulesStore {
         `[rules-store] skipped ${skipped} unreadable rule(s) while migrating ${this.rulesPath}`,
       );
     }
-    if (!changed && skipped === 0) return;
+    // A skipped entry always makes the output differ from the input, so `changed` covers it too.
+    if (!changed) return;
     // The in-memory rules are already migrated, so persisting them is best-effort: an unwritable
     // data dir must not stop the app from starting, and the next mutation persists again anyway.
     if (!(await this.backupBeforeMigration())) return;

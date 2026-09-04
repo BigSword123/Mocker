@@ -187,6 +187,36 @@ describe('migrateRule tolerance', () => {
   });
 });
 
+describe('migrateRule priority', () => {
+  it('keeps a numeric string priority as a number so the stored order survives', () => {
+    const out = migrateRule(modernRule({ priority: '3' }))!;
+    expect(out.priority).toBe(3);
+    expect(migrateRules([modernRule({ priority: '3' })]).changed).toBe(true);
+  });
+
+  it('keeps negative, fractional and padded numeric strings', () => {
+    expect(migrateRule(modernRule({ priority: '-2' }))!.priority).toBe(-2);
+    expect(migrateRule(modernRule({ priority: '2.5' }))!.priority).toBe(2.5);
+    expect(migrateRule(modernRule({ priority: ' 4 ' }))!.priority).toBe(4);
+  });
+
+  it('defaults empty, invalid and non-finite priorities to zero', () => {
+    const invalid = ['', '   ', 'abc', '3px', null, true, {}, [], NaN, Infinity, -Infinity];
+    for (const priority of invalid) {
+      const out = migrateRule(modernRule({ priority }))!;
+      expect(out.priority, `priority ${String(priority)}`).toBe(0);
+      expect(migrateRules([modernRule({ priority })]).changed).toBe(true);
+    }
+  });
+
+  it('leaves a valid numeric priority untouched', () => {
+    for (const priority of [0, -2, 2.5, 7]) {
+      expect(migrateRule(modernRule({ priority }))!.priority).toBe(priority);
+      expect(migrateRules([modernRule({ priority })]).changed).toBe(false);
+    }
+  });
+});
+
 describe('migrateRule malformed headers', () => {
   it('drops HeaderRow entries that are not objects', () => {
     const out = migrateRule(
@@ -327,5 +357,11 @@ describe('migrateRules', () => {
 
   it('returns an empty unchanged result for an empty array', () => {
     expect(migrateRules([])).toEqual({ rules: [], skipped: 0, changed: false });
+  });
+
+  it('returns an empty unchanged result for input that is not an array', () => {
+    for (const raw of [null, undefined, 'rules', 7, true, legacyRule(), { 0: legacyRule() }]) {
+      expect(migrateRules(raw)).toEqual({ rules: [], skipped: 0, changed: false });
+    }
   });
 });

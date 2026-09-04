@@ -28,8 +28,11 @@ export function migrateRule(raw: unknown): MockRule | undefined {
   return migrateOne(raw)?.rule;
 }
 
-/** Migrates a persisted rule array, dropping entries that cannot be recovered. */
-export function migrateRules(raw: unknown[]): RuleMigrationResult {
+/**
+ * Migrates a persisted rule array, dropping entries that cannot be recovered. The persisted file is
+ * untrusted, so anything that is not an array yields an empty, unchanged result instead of throwing.
+ */
+export function migrateRules(raw: unknown): RuleMigrationResult {
   if (!Array.isArray(raw)) return { rules: [], skipped: 0, changed: false };
   const rules: MockRule[] = [];
   let skipped = 0;
@@ -68,7 +71,7 @@ function migrateOne(raw: unknown): MigratedRule | undefined {
     changed = true;
   }
   if (typeof draft.priority !== 'number' || !Number.isFinite(draft.priority)) {
-    draft.priority = 0;
+    draft.priority = toPriority(draft.priority);
     changed = true;
   }
 
@@ -154,6 +157,19 @@ function toText(value: unknown): string {
     return String(value);
   }
   return '';
+}
+
+/**
+ * Recovers the sort order from a priority that is not a usable number: a numeric string (a shape
+ * older releases persisted) keeps its value, anything else - empty, non-numeric or non-finite -
+ * falls back to the front of the list.
+ */
+function toPriority(value: unknown): number {
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return 0;
 }
 
 /**
