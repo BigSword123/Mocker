@@ -139,3 +139,45 @@ table.kv .k { color: #8ab4ff; width: 200px; }
   display: flex;
   justify-content: space-between;
 }
+
+.editable-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.editable-table th,
+.editable-table td {
+  padding: 4px;
+  border: 1px solid #ddd;
+}
+.editable-table th {
+  background: #f5f5f5;
+  font-weight: 500;
+  font-size: 12px;
+}
+.editable-table td input {
+  width: 100%;
+  padding: 4px;
+  border: 0;
+  background: transparent;
+}
+.editable-table .col-enabled {
+  width: 32px;
+  text-align: center;
+}
+.editable-table .col-action {
+  width: 32px;
+  text-align: center;
+}
+.editable-table .col-action button {
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  color: #999;
+}
+.editable-table tr.disabled td {
+  opacity: 0.5;
+}
+.editable-table tr.disabled td input[type='text'],
+.editable-table tr.disabled td input:not([type]) {
+  text-decoration: line-through;
+}
