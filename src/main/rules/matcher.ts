@@ -1,4 +1,4 @@
-import type { HeaderRow, RuleMatch } from '../../shared/types';
+import type { HeaderRow, RuleBody, RuleMatch } from '../../shared/types';
 
 export interface RequestDescription {
   method: string;
@@ -13,8 +13,8 @@ export function matchRule(match: RuleMatch, req: RequestDescription): boolean {
     matchUrl(match, req.url) &&
     matchMethod(match.method, req.method) &&
     matchQuery(match.query, req.query) &&
-    matchHeaders(toHeaderRecord(match.headers), req.headers) &&
-    matchBody(match.bodyContains, req.body)
+    matchHeaders(match.headers, req.headers) &&
+    matchBody(match, req.body)
   );
 }
 
@@ -60,21 +60,92 @@ function matchQuery(expected: Record<string, string> | undefined, query: URLSear
   return Object.entries(expected).every(([k, v]) => query.getAll(k).includes(v));
 }
 
-function toHeaderRecord(
-  headers: Record<string, string> | HeaderRow[] | undefined,
-): Record<string, string> | undefined {
-  if (!headers) return undefined;
-  if (!Array.isArray(headers)) return headers;
-  return Object.fromEntries(headers.filter((h) => h.enabled).map((h) => [h.name, h.value]));
-}
-
-function matchHeaders(expected: Record<string, string> | undefined, headers: Record<string, string>): boolean {
+function matchHeaders(
+  expected: Record<string, string> | HeaderRow[] | undefined,
+  headers: Record<string, string>,
+): boolean {
   if (!expected) return true;
-  const lower = new Map(Object.entries(headers).map(([k, v]) => [k.toLowerCase(), v]));
-  return Object.entries(expected).every(([k, v]) => lower.get(k.toLowerCase()) === v);
+  const actual = new Map(Object.entries(headers).map(([k, v]) => [k.toLowerCase(), v]));
+  if (Array.isArray(expected)) {
+    return expected
+      .filter((row) => row.enabled === true)
+      .every((row) => actual.get(row.name.toLowerCase()) === row.value);
+  }
+  return Object.entries(expected).every(([name, value]) => actual.get(name.toLowerCase()) === value);
 }
 
-function matchBody(needle: string | undefined, body: string): boolean {
-  if (!needle) return true;
-  return body.includes(needle);
+function matchBody(match: RuleMatch, body: string): boolean {
+  if (match.body) return matchBodyByRule(match.body, body);
+  if (match.bodyContains) return body.includes(match.bodyContains);
+  return true;
+}
+
+function matchBodyByRule(rule: RuleBody, body: string): boolean {
+  switch (rule.mode) {
+    case 'none':
+      return true;
+    case 'raw':
+      return matchRawBody(rule, body);
+    case 'form-data':
+    case 'urlencoded':
+      return matchFormBody(rule.form ?? [], body);
+    default:
+      return true;
+  }
+}
+
+function matchRawBody(rule: RuleBody, body: string): boolean {
+  const raw = rule.raw ?? '';
+  switch (rule.matchStrategy ?? 'contains') {
+    case 'equals':
+      return body === raw;
+    case 'json-deep':
+      return matchJsonDeep(raw, body);
+    case 'contains':
+    default:
+      return body.includes(raw);
+  }
+}
+
+function matchJsonDeep(raw: string, body: string): boolean {
+  const expected = parseJson(raw);
+  const actual = parseJson(body);
+  if (!expected.ok || !actual.ok) return false;
+  return deepEqual(expected.value, actual.value);
+}
+
+function parseJson(text: string): { ok: true; value: unknown } | { ok: false } {
+  try {
+    return { ok: true, value: JSON.parse(text) as unknown };
+  } catch {
+    return { ok: false };
+  }
+}
+
+function deepEqual(expected: unknown, actual: unknown): boolean {
+  if (expected === actual) return true;
+  if (Array.isArray(expected) || Array.isArray(actual)) {
+    if (!Array.isArray(expected) || !Array.isArray(actual)) return false;
+    if (expected.length !== actual.length) return false;
+    return expected.every((item, index) => deepEqual(item, actual[index]));
+  }
+  if (isJsonObject(expected) && isJsonObject(actual)) {
+    const expectedKeys = Object.keys(expected);
+    if (expectedKeys.length !== Object.keys(actual).length) return false;
+    return expectedKeys.every(
+      (key) => Object.prototype.hasOwnProperty.call(actual, key) && deepEqual(expected[key], actual[key]),
+    );
+  }
+  return false;
+}
+
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function matchFormBody(form: HeaderRow[], body: string): boolean {
+  const enabled = form.filter((row) => row.enabled === true);
+  if (enabled.length === 0) return true;
+  const params = new URLSearchParams(body);
+  return enabled.every((row) => params.getAll(row.name).includes(row.value));
 }
