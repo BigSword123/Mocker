@@ -40,6 +40,18 @@ function modernRule(overrides: Record<string, unknown> = {}): MockRule {
   } as MockRule;
 }
 
+/** A rule whose top level is valid, so only the supplied nested match fields are under test. */
+function ruleWithMatch(match: Record<string, unknown>): Record<string, unknown> {
+  return {
+    id: 'nested-1',
+    name: 'nested',
+    enabled: true,
+    priority: 1,
+    match: { urlType: 'exact', urlPattern: 'http://x.com/nested', method: 'ANY', ...match },
+    action: { status: 200, headers: {}, body: 'ok' },
+  };
+}
+
 describe('migrateRule headers', () => {
   it('converts a record of headers into enabled HeaderRow entries in input order', () => {
     const out = migrateRule(legacyRule())!;
@@ -172,6 +184,121 @@ describe('migrateRule tolerance', () => {
     expect(out.enabled).toBe(false);
     expect(out.priority).toBe(0);
     expect(migrateRules([raw]).changed).toBe(true);
+  });
+});
+
+describe('migrateRule malformed headers', () => {
+  it('drops HeaderRow entries that are not objects', () => {
+    const out = migrateRule(
+      ruleWithMatch({
+        headers: [null, 'X-A: a', 7, [], { enabled: true, name: 'X-Ok', value: 'ok' }],
+      }),
+    )!;
+    expect(out.match.headers).toEqual([{ enabled: true, name: 'X-Ok', value: 'ok' }]);
+  });
+
+  it('coerces non-string HeaderRow name, value and description so the matcher cannot throw', () => {
+    const out = migrateRule(
+      ruleWithMatch({ headers: [{ enabled: 'yes', name: 7, value: null, description: 3 }] }),
+    )!;
+    expect(out.match.headers).toEqual([
+      { enabled: true, name: '7', value: '', description: '3' },
+    ]);
+    const rows = out.match.headers as HeaderRow[];
+    expect(typeof rows[0].name).toBe('string');
+    expect(typeof rows[0].enabled).toBe('boolean');
+  });
+
+  it('fills a missing HeaderRow enabled flag with the matcher default', () => {
+    const out = migrateRule(ruleWithMatch({ headers: [{ name: 'X-A', value: 'a' }] }))!;
+    expect(out.match.headers).toEqual([{ enabled: false, name: 'X-A', value: 'a' }]);
+  });
+
+  it('removes a match.headers value that is neither a record nor an array', () => {
+    for (const headers of ['X-A: a', 7, null, true]) {
+      const out = migrateRule(ruleWithMatch({ headers }))!;
+      expect('headers' in out.match).toBe(false);
+      expect(migrateRules([ruleWithMatch({ headers })]).changed).toBe(true);
+    }
+  });
+
+  it('retains valid HeaderRow arrays without reporting a change', () => {
+    const raw = ruleWithMatch({
+      headers: [
+        { enabled: true, name: 'X-A', value: 'a', description: 'note' },
+        { enabled: false, name: 'X-B', value: '' },
+      ],
+    });
+    const out = migrateRule(raw)!;
+    expect(out.match.headers).toEqual([
+      { enabled: true, name: 'X-A', value: 'a', description: 'note' },
+      { enabled: false, name: 'X-B', value: '' },
+    ]);
+    expect(migrateRules([raw]).changed).toBe(false);
+  });
+});
+
+describe('migrateRule malformed body', () => {
+  it('removes a match.body value that is not an object', () => {
+    for (const body of ['raw text', 7, [], null]) {
+      const out = migrateRule(ruleWithMatch({ body }))!;
+      expect('body' in out.match).toBe(false);
+      expect(migrateRules([ruleWithMatch({ body })]).changed).toBe(true);
+    }
+  });
+
+  it('still converts legacy bodyContains when the stored body is malformed', () => {
+    const out = migrateRule(ruleWithMatch({ body: 'garbage', bodyContains: 'hello' }))!;
+    expect(out.match.body).toEqual({ mode: 'raw', raw: 'hello', matchStrategy: 'contains' });
+  });
+
+  it('normalises an unknown or missing body mode to none without touching other fields', () => {
+    const unknown = migrateRule(ruleWithMatch({ body: { mode: 'weird', raw: 'x' } }))!;
+    expect(unknown.match.body).toEqual({ mode: 'none', raw: 'x' });
+
+    const missing = migrateRule(ruleWithMatch({ body: { raw: 'x', matchStrategy: 'equals' } }))!;
+    expect(missing.match.body).toEqual({ mode: 'none', raw: 'x', matchStrategy: 'equals' });
+  });
+
+  it('retains every valid body mode without reporting a change', () => {
+    const bodies = [
+      { mode: 'none' },
+      { mode: 'raw', raw: '{"a":1}', matchStrategy: 'json-deep', rawContentType: 'application/json' },
+      { mode: 'form-data', form: [{ enabled: true, name: 'f', value: '1' }] },
+      { mode: 'urlencoded', form: [{ enabled: false, name: 'f', value: '1', description: 'd' }] },
+    ];
+    for (const body of bodies) {
+      const raw = ruleWithMatch({ body });
+      expect(migrateRule(raw)!.match.body).toEqual(body);
+      expect(migrateRules([raw]).changed).toBe(false);
+    }
+  });
+
+  it('removes a body.form value that is not an array so cloning cannot call map on it', () => {
+    for (const form of [{}, 'f=1', 7, null]) {
+      const out = migrateRule(ruleWithMatch({ body: { mode: 'form-data', form } }))!;
+      expect(out.match.body).toEqual({ mode: 'form-data' });
+      expect('form' in out.match.body!).toBe(false);
+      expect(migrateRules([ruleWithMatch({ body: { mode: 'form-data', form } })]).changed).toBe(true);
+    }
+  });
+
+  it('drops malformed form rows and normalises the remaining fields', () => {
+    const out = migrateRule(
+      ruleWithMatch({
+        body: {
+          mode: 'urlencoded',
+          form: [null, 'f=1', { name: 'f' }, { enabled: 1, name: 2, value: 3 }],
+        },
+      }),
+    )!;
+    expect(out.match.body).toEqual({
+      mode: 'urlencoded',
+      form: [
+        { enabled: false, name: 'f', value: '' },
+        { enabled: true, name: '2', value: '3' },
+      ],
+    });
   });
 });
 

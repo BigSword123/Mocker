@@ -1,31 +1,35 @@
 import { randomUUID } from 'node:crypto';
 import { constants as fsConstants, promises as fs } from 'node:fs';
 import * as path from 'node:path';
-import type { MockRule, RuleInput, RulePatch } from '../../shared/types';
+import type { HeaderRow, MockRule, RuleInput, RulePatch } from '../../shared/types';
 import { JsonStore } from './json-store';
 import { migrateRules } from './migrate';
 
 const MAX_SNAPSHOTS = 50;
 const LEGACY_BACKUP_SUFFIX = '.v1-bak';
 
+function cloneRows(rows: HeaderRow[]): HeaderRow[] {
+  return rows.map((row) => ({ ...row }));
+}
+
+/**
+ * Copies a rule deeply enough that a listed rule shares no mutable structure with the store.
+ * Every nested container is checked before it is walked: migration normalises the persisted
+ * shapes, but listing rules must not throw even if unexpected data ever reaches the store.
+ */
 function cloneRule(rule: MockRule): MockRule {
+  const { query, headers, body } = rule.match;
   return {
     ...rule,
     match: {
       ...rule.match,
-      ...(rule.match.query ? { query: { ...rule.match.query } } : {}),
-      ...(rule.match.headers
-        ? {
-            headers: Array.isArray(rule.match.headers)
-              ? rule.match.headers.map((h) => ({ ...h }))
-              : { ...rule.match.headers },
-          }
-        : {}),
-      ...(rule.match.body
+      ...(query ? { query: { ...query } } : {}),
+      ...(headers ? { headers: Array.isArray(headers) ? cloneRows(headers) : { ...headers } } : {}),
+      ...(body
         ? {
             body: {
-              ...rule.match.body,
-              ...(rule.match.body.form ? { form: rule.match.body.form.map((h) => ({ ...h })) } : {}),
+              ...body,
+              ...(Array.isArray(body.form) ? { form: cloneRows(body.form) } : {}),
             },
           }
         : {}),
@@ -55,14 +59,20 @@ export class RulesStore {
     const raw = (await this.store.read()) as unknown[];
     const { rules, skipped, changed } = migrateRules(raw);
     this.rules = rules;
+    if (skipped > 0) {
+      console.warn(
+        `[rules-store] skipped ${skipped} unreadable rule(s) while migrating ${this.rulesPath}`,
+      );
+    }
     if (!changed && skipped === 0) return;
     // The in-memory rules are already migrated, so persisting them is best-effort: an unwritable
     // data dir must not stop the app from starting, and the next mutation persists again anyway.
     if (!(await this.backupBeforeMigration())) return;
     try {
       await this.store.write(this.rules);
-    } catch {
+    } catch (err: unknown) {
       // keep the migrated rules in memory; the original file stays intact next to its backup
+      console.warn(`[rules-store] could not write migrated rules to ${this.rulesPath}:`, err);
     }
   }
 
@@ -73,16 +83,18 @@ export class RulesStore {
    * is unprotected, so the caller must not rewrite it.
    */
   private async backupBeforeMigration(): Promise<boolean> {
+    const backupPath = `${this.rulesPath}${LEGACY_BACKUP_SUFFIX}`;
     try {
-      await fs.copyFile(
-        this.rulesPath,
-        `${this.rulesPath}${LEGACY_BACKUP_SUFFIX}`,
-        fsConstants.COPYFILE_EXCL,
-      );
+      await fs.copyFile(this.rulesPath, backupPath, fsConstants.COPYFILE_EXCL);
       return true;
     } catch (err: unknown) {
       const code = (err as NodeJS.ErrnoException).code;
-      return code === 'EEXIST' || code === 'ENOENT';
+      if (code === 'EEXIST' || code === 'ENOENT') return true;
+      console.warn(
+        `[rules-store] no migration backup at ${backupPath}, keeping ${this.rulesPath} as it is:`,
+        err,
+      );
+      return false;
     }
   }
 

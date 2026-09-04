@@ -1,7 +1,9 @@
+import { promises as nodeFs } from 'node:fs';
 import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { JsonStore } from '../src/main/storage/json-store';
 import { RulesStore } from '../src/main/storage/rules-store';
 import type { HeaderRow, MockRule, RuleInput } from '../src/shared/types';
 
@@ -19,6 +21,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   await rm(dir, { recursive: true, force: true });
 });
 
@@ -184,6 +187,33 @@ describe('RulesStore', () => {
       form: [{ enabled: true, name: 'f', value: '1' }],
     });
   });
+
+  it('lists malformed in-memory rules without throwing', async () => {
+    const store = new RulesStore(dir);
+    await store.load();
+    // Defence in depth: migration normalises these shapes, but cloning must not throw even if
+    // unexpected data ever reaches the store.
+    (store as unknown as { rules: unknown[] }).rules = [
+      {
+        id: 'x',
+        name: 'x',
+        enabled: true,
+        priority: 1,
+        match: {
+          urlType: 'exact',
+          urlPattern: 'http://x.com/x',
+          method: 'ANY',
+          query: 'garbage',
+          headers: 'garbage',
+          body: { mode: 'form-data', form: 'garbage' },
+        },
+        action: { status: 200, body: 'x' },
+      },
+    ];
+
+    expect(() => store.list()).not.toThrow();
+    expect(store.list()).toHaveLength(1);
+  });
 });
 
 describe('RulesStore migration on load', () => {
@@ -328,5 +358,91 @@ describe('RulesStore migration on load', () => {
     expect(await readdir(dir)).toEqual([]);
     await store.add(input('a'));
     expect(store.list().map((r) => r.name)).toEqual(['a']);
+  });
+
+  it('normalises malformed nested match data so listing a migrated rule cannot throw', async () => {
+    await seed([
+      {
+        id: 'nested',
+        name: 'nested',
+        enabled: true,
+        priority: 1,
+        match: {
+          urlType: 'exact',
+          urlPattern: 'http://x.com/nested',
+          method: 'ANY',
+          headers: [{ enabled: true, name: 7, value: 'a' }, null],
+          body: { mode: 'form-data', form: {} },
+        },
+        action: { status: 200, headers: {}, body: 'nested' },
+      },
+    ]);
+
+    const store = new RulesStore(dir);
+    await store.load();
+
+    expect(() => store.list()).not.toThrow();
+    const listed = store.list()[0];
+    expect(listed.match.headers).toEqual([{ enabled: true, name: '7', value: 'a' }]);
+    expect(listed.match.body).toEqual({ mode: 'form-data' });
+
+    const persisted = JSON.parse(await readFile(rulesPath(), 'utf8')) as MockRule[];
+    expect(persisted[0].match.headers).toEqual([{ enabled: true, name: '7', value: 'a' }]);
+    expect(persisted[0].match.body).toEqual({ mode: 'form-data' });
+  });
+
+  it('warns about the rules it skipped', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await seed(['broken', legacyPersisted('good'), { id: 5 }]);
+
+    const store = new RulesStore(dir);
+    await store.load();
+
+    expect(store.list().map((r) => r.id)).toEqual(['good']);
+    const logged = warn.mock.calls.flat().join(' ');
+    expect(logged).toContain('2');
+    expect(logged.toLowerCase()).toContain('skip');
+  });
+
+  it('does not rewrite rules.json and warns when the backup cannot be written', async () => {
+    const original = await seed([legacyPersisted('a')]);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const copyFile = vi
+      .spyOn(nodeFs, 'copyFile')
+      .mockRejectedValue(Object.assign(new Error('copy refused'), { code: 'EACCES' }));
+
+    const store = new RulesStore(dir);
+    await expect(store.load()).resolves.toBeUndefined();
+
+    expect(copyFile).toHaveBeenCalled();
+    expect(await readFile(rulesPath(), 'utf8')).toBe(original);
+    await expect(readFile(backupPath(), 'utf8')).rejects.toThrow();
+    // The in-memory rules are still migrated so the app keeps working.
+    expect(store.list()[0].match.body).toEqual({
+      mode: 'raw',
+      raw: 'needle',
+      matchStrategy: 'contains',
+    });
+    const logged = warn.mock.calls.flat().join(' ');
+    expect(logged.toLowerCase()).toContain('backup');
+    expect(logged).toContain('copy refused');
+  });
+
+  it('keeps the migrated rules and warns when the migration rewrite fails', async () => {
+    const original = await seed([legacyPersisted('a')]);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.spyOn(JsonStore.prototype, 'write').mockRejectedValue(new Error('write refused'));
+
+    const store = new RulesStore(dir);
+    await expect(store.load()).resolves.toBeUndefined();
+
+    expect(await readFile(rulesPath(), 'utf8')).toBe(original);
+    expect(await readFile(backupPath(), 'utf8')).toBe(original);
+    expect(store.list()[0].match.body).toEqual({
+      mode: 'raw',
+      raw: 'needle',
+      matchStrategy: 'contains',
+    });
+    expect(warn.mock.calls.flat().join(' ')).toContain('write refused');
   });
 });

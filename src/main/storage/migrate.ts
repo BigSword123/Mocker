@@ -1,4 +1,4 @@
-import type { HeaderRow, MockRule, RuleBody } from '../../shared/types';
+import type { BodyMode, HeaderRow, MockRule, RuleBody } from '../../shared/types';
 
 /**
  * Result of migrating a persisted rule array.
@@ -59,6 +59,7 @@ function migrateOne(raw: unknown): MigratedRule | undefined {
   const match = draft.match as Record<string, unknown>;
   if (migrateHeaders(match)) changed = true;
   if (migrateBody(match)) changed = true;
+  if (normaliseBody(match)) changed = true;
 
   // `enabled` / `priority` are required by the store (toggling and sorting); repair them rather
   // than dropping an otherwise usable rule.
@@ -74,18 +75,85 @@ function migrateOne(raw: unknown): MigratedRule | undefined {
   return { rule: draft as unknown as MockRule, changed };
 }
 
-/** Legacy `match.headers` records become one enabled HeaderRow per entry, in input order. */
+/**
+ * Brings `match.headers` into the current representation. A legacy record becomes one enabled
+ * HeaderRow per entry (in input order); an existing row array is only repaired where a malformed
+ * row would break the matcher (`row.name.toLowerCase()`) or the store's cloning; anything else
+ * (string, number, null, ...) is dropped because it cannot express a header constraint.
+ */
 function migrateHeaders(match: Record<string, unknown>): boolean {
-  if (!isPlainObject(match.headers)) return false;
-  match.headers = Object.entries(match.headers).map(
-    ([name, value]): HeaderRow => ({
-      enabled: true,
-      name,
-      value: String(value ?? ''),
-      description: '',
-    }),
-  );
+  if (!('headers' in match)) return false;
+  const headers = match.headers;
+  if (isPlainObject(headers)) {
+    match.headers = Object.entries(headers).map(
+      ([name, value]): HeaderRow => ({
+        enabled: true,
+        name,
+        value: toText(value),
+        description: '',
+      }),
+    );
+    return true;
+  }
+  if (Array.isArray(headers)) {
+    const normalised = normaliseRows(headers);
+    match.headers = normalised.rows;
+    return normalised.changed;
+  }
+  delete match.headers;
   return true;
+}
+
+/** Drops entries that are not objects and repairs the remaining rows. */
+function normaliseRows(rows: unknown[]): { rows: HeaderRow[]; changed: boolean } {
+  const out: HeaderRow[] = [];
+  let changed = false;
+  for (const entry of rows) {
+    if (!isPlainObject(entry)) {
+      changed = true;
+      continue;
+    }
+    const normalised = normaliseRow(entry);
+    if (normalised.changed) changed = true;
+    out.push(normalised.row);
+  }
+  return { rows: out, changed };
+}
+
+/**
+ * Repairs only the fields whose type the matcher and the UI rely on, so a valid row is returned
+ * unchanged (and keeps any extra stored field) instead of being rewritten.
+ */
+function normaliseRow(row: Record<string, unknown>): { row: HeaderRow; changed: boolean } {
+  const out: Record<string, unknown> = { ...row };
+  let changed = false;
+  if (typeof out.enabled !== 'boolean') {
+    // The matcher only honours `enabled === true`, so an unusable flag becomes a disabled row.
+    out.enabled = out.enabled === undefined ? false : Boolean(out.enabled);
+    changed = true;
+  }
+  if (typeof out.name !== 'string') {
+    out.name = toText(out.name);
+    changed = true;
+  }
+  if (typeof out.value !== 'string') {
+    out.value = toText(out.value);
+    changed = true;
+  }
+  if ('description' in out && typeof out.description !== 'string') {
+    out.description = toText(out.description);
+    changed = true;
+  }
+  return { row: out as unknown as HeaderRow, changed };
+}
+
+/** Header, query and form values are text; scalars keep their meaning, structures cannot. */
+function toText(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
+    return String(value);
+  }
+  return '';
 }
 
 /**
@@ -102,6 +170,43 @@ function migrateBody(match: Record<string, unknown>): boolean {
     match.body = body;
   }
   return true;
+}
+
+const BODY_MODES = new Set<string>(['none', 'raw', 'form-data', 'urlencoded'] satisfies BodyMode[]);
+
+/**
+ * Makes `match.body` safe to clone and to match against: a body that is not an object cannot
+ * express a constraint and is dropped, an unrecognised mode becomes `none` (which is what the
+ * matcher already does with it), and `form` is reduced to well-formed rows so neither the store's
+ * cloning nor the matcher can trip over a non-array `form` or a malformed row.
+ */
+function normaliseBody(match: Record<string, unknown>): boolean {
+  if (!('body' in match)) return false;
+  const body = match.body;
+  if (!isPlainObject(body)) {
+    delete match.body;
+    return true;
+  }
+  let changed = false;
+  if (!isBodyMode(body.mode)) {
+    body.mode = 'none';
+    changed = true;
+  }
+  if ('form' in body) {
+    if (Array.isArray(body.form)) {
+      const normalised = normaliseRows(body.form);
+      body.form = normalised.rows;
+      if (normalised.changed) changed = true;
+    } else {
+      delete body.form;
+      changed = true;
+    }
+  }
+  return changed;
+}
+
+function isBodyMode(value: unknown): value is BodyMode {
+  return typeof value === 'string' && BODY_MODES.has(value);
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
