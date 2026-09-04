@@ -26,10 +26,6 @@ import {
   isConnectionTemplateId,
   responseStatusError,
 } from '../lib/error-template-apply';
-import {
-  formatLines,
-  parseLines,
-} from '../lib/rule-match-edit';
 import EditableTable from './EditableTable';
 import FakerCatalogModal from './FakerCatalogModal';
 
@@ -57,6 +53,22 @@ const SNIPPETS = [
 const TEMPLATE_SELECT_ID = 'rule-error-template';
 const CONNECTION_NOTE_ID = 'rule-connection-only-note';
 
+const EMPTY_ROW: HeaderRow = { enabled: true, name: '', value: '', description: '' };
+
+/** 旧规则把 query 存成 Record，新规则与 headers 一样存 HeaderRow[]，两种都能预填。 */
+function queryToRows(query: Record<string, string> | HeaderRow[] | undefined): HeaderRow[] {
+  if (Array.isArray(query)) return query;
+  if (query) {
+    return Object.entries(query).map(([name, value]) => ({
+      enabled: true,
+      name,
+      value,
+      description: '',
+    }));
+  }
+  return [{ ...EMPTY_ROW }];
+}
+
 interface Props {
   initial: MockRule | null;
   draft?: RuleInput;
@@ -71,7 +83,7 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
   const [urlType, setUrlType] = useState<UrlPatternType>(seed?.match.urlType ?? 'wildcard');
   const [urlPattern, setUrlPattern] = useState(seed?.match.urlPattern ?? '');
   const [method, setMethod] = useState<HttpMethod>(seed?.match.method ?? 'ANY');
-  const [queryText, setQueryText] = useState(formatLines(seed?.match.query, '='));
+  const [queryRows, setQueryRows] = useState<HeaderRow[]>(() => queryToRows(seed?.match.query));
   const [headersRows, setHeadersRows] = useState<HeaderRow[]>(() => {
     if (Array.isArray(seed?.match.headers)) return seed.match.headers;
     if (seed?.match.headers && typeof seed.match.headers === 'object') {
@@ -185,7 +197,7 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
       setError(statusError);
       return;
     }
-    const query = parseLines(queryText, '=');
+    const query = queryRows.some((r) => r.name || r.value) ? queryRows : undefined;
     const action = buildAction();
     try {
       await api.rulesValidate(action);
@@ -215,7 +227,7 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
         urlType,
         urlPattern,
         method,
-        query: Object.keys(query).length ? query : undefined,
+        query,
         headers: headersRows.some((r) => r.name || r.value) ? headersRows : undefined,
         body: matchBody,
       },
@@ -282,8 +294,8 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
           <select value={method} onChange={(e) => setMethod(e.target.value as HttpMethod)}>
             {METHODS.map((m) => <option key={m}>{m}</option>)}
           </select>
-          <label>Query（每行 k=v）</label>
-          <textarea rows={2} value={queryText} onChange={(e) => setQueryText(e.target.value)} />
+          <label>Query 参数</label>
+          <EditableTable rows={queryRows} onChange={setQueryRows} ariaLabel="Query 参数" />
           <label>请求头</label>
           <EditableTable rows={headersRows} onChange={setHeadersRows} ariaLabel="请求头" />
           <label>请求体</label>
@@ -331,7 +343,7 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
                 </label>
               </div>
               <textarea
-                rows={8}
+                rows={12}
                 value={bodyRule.raw ?? ''}
                 onChange={(e) => setBodyRule({ ...bodyRule, raw: e.target.value })}
                 placeholder='{"keyword": "test"}'
@@ -369,7 +381,7 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
           <label>响应体</label>
           <textarea
             ref={bodyRef}
-            rows={8}
+            rows={16}
             value={body}
             disabled={connectionOnly}
             aria-describedby={connectionOnly ? CONNECTION_NOTE_ID : undefined}

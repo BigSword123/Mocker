@@ -60,6 +60,7 @@ function migrateOne(raw: unknown): MigratedRule | undefined {
 
   let changed = false;
   const match = draft.match as Record<string, unknown>;
+  if (migrateQuery(match)) changed = true;
   if (migrateHeaders(match)) changed = true;
   if (migrateBody(match)) changed = true;
   if (normaliseBody(match)) changed = true;
@@ -76,6 +77,34 @@ function migrateOne(raw: unknown): MigratedRule | undefined {
   }
 
   return { rule: draft as unknown as MockRule, changed };
+}
+
+/**
+ * Brings `match.query` into the same HeaderRow[] representation as `match.headers`, so the editor
+ * can offer the enable toggle and description column for query constraints. A legacy record
+ * becomes one enabled row per entry; anything that can not express a constraint is dropped.
+ */
+function migrateQuery(match: Record<string, unknown>): boolean {
+  if (!('query' in match)) return false;
+  const query = match.query;
+  if (isPlainObject(query)) {
+    match.query = Object.entries(query).map(
+      ([name, value]): HeaderRow => ({
+        enabled: true,
+        name,
+        value: toText(value),
+        description: '',
+      }),
+    );
+    return true;
+  }
+  if (Array.isArray(query)) {
+    const normalised = normaliseRows(query);
+    match.query = normalised.rows;
+    return normalised.changed;
+  }
+  delete match.query;
+  return true;
 }
 
 /**

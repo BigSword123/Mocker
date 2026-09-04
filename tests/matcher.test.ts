@@ -79,6 +79,24 @@ describe('matchRule', () => {
     expect(matchRule({ ...m, query: { tag: 'c' } }, r)).toBe(false);
   });
 
+  it('matches query rows and ignores disabled ones', () => {
+    const m: RuleMatch = {
+      ...base,
+      query: [
+        { enabled: true, name: 'page', value: '2', description: '' },
+        { enabled: false, name: 'page', value: '9', description: '过期条件' },
+      ],
+    };
+    expect(matchRule(m, req())).toBe(true);
+
+    const allDisabled: RuleMatch = {
+      ...base,
+      query: [{ enabled: false, name: 'page', value: '2', description: '' }],
+    };
+    // 与 headers 一致：行全部停用后 query 条件视为空，不再参与匹配
+    expect(matchRule(allDisabled, req())).toBe(true);
+  });
+
   it('treats wildcard special characters literally', () => {
     const m: RuleMatch = { ...base, urlType: 'wildcard', urlPattern: 'http://api.example.com/users.json' };
     expect(matchRule(m, req({ url: 'http://api.example.com/usersXjson' }))).toBe(false);

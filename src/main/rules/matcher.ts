@@ -55,8 +55,16 @@ function matchMethod(ruleMethod: string, actual: string): boolean {
   return ruleMethod === 'ANY' || ruleMethod === actual.toUpperCase();
 }
 
-function matchQuery(expected: Record<string, string> | undefined, query: URLSearchParams): boolean {
+function matchQuery(
+  expected: Record<string, string> | HeaderRow[] | undefined,
+  query: URLSearchParams,
+): boolean {
   if (!expected) return true;
+  if (Array.isArray(expected)) {
+    return expected
+      .filter((row) => row.enabled === true)
+      .every((row) => query.getAll(row.name).includes(row.value));
+  }
   return Object.entries(expected).every(([k, v]) => query.getAll(k).includes(v));
 }
 

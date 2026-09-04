@@ -151,14 +151,6 @@ describe('migrateRule tolerance', () => {
     expect(migrateRules([raw]).changed).toBe(false);
   });
 
-  it('keeps a query record as a cloned record', () => {
-    const raw = legacyRule();
-    (raw.match as Record<string, unknown>).query = { a: '1' };
-    const out = migrateRule(raw)!;
-    expect(out.match.query).toEqual({ a: '1' });
-    expect(out.match.query).not.toBe((raw.match as Record<string, unknown>).query);
-  });
-
   it('returns undefined for fundamentally invalid records', () => {
     expect(migrateRule(null)).toBeUndefined();
     expect(migrateRule(undefined)).toBeUndefined();
@@ -265,6 +257,73 @@ describe('migrateRule malformed headers', () => {
       { enabled: false, name: 'X-B', value: '' },
     ]);
     expect(migrateRules([raw]).changed).toBe(false);
+  });
+});
+
+describe('migrateRule query', () => {
+  it('converts a query record into enabled HeaderRow entries in input order', () => {
+    const raw = legacyRule();
+    (raw.match as Record<string, unknown>).query = { page: '2', tag: 'a' };
+    const out = migrateRule(raw)!;
+    expect(out.match.query).toEqual([
+      { enabled: true, name: 'page', value: '2', description: '' },
+      { enabled: true, name: 'tag', value: 'a', description: '' },
+    ]);
+    expect(migrateRules([raw]).changed).toBe(true);
+  });
+
+  it('stringifies non-string record query values', () => {
+    const raw = legacyRule();
+    (raw.match as Record<string, unknown>).query = { n: 7, nil: null };
+    const out = migrateRule(raw)!;
+    expect(out.match.query).toEqual([
+      { enabled: true, name: 'n', value: '7', description: '' },
+      { enabled: true, name: 'nil', value: '', description: '' },
+    ]);
+  });
+
+  it('drops malformed query rows and coerces the remaining fields', () => {
+    const out = migrateRule(
+      ruleWithMatch({
+        query: [null, 'page=2', { enabled: 'yes', name: 7, value: null }, { enabled: true, name: 'ok', value: '1' }],
+      }),
+    )!;
+    expect(out.match.query).toEqual([
+      { enabled: true, name: '7', value: '' },
+      { enabled: true, name: 'ok', value: '1' },
+    ]);
+  });
+
+  it('retains a valid query row array without reporting a change', () => {
+    const raw = ruleWithMatch({
+      query: [
+        { enabled: true, name: 'page', value: '2', description: '第二页' },
+        { enabled: false, name: 'debug', value: '1' },
+      ],
+    });
+    const out = migrateRule(raw)!;
+    expect(out.match.query).toEqual([
+      { enabled: true, name: 'page', value: '2', description: '第二页' },
+      { enabled: false, name: 'debug', value: '1' },
+    ]);
+    expect(migrateRules([raw]).changed).toBe(false);
+  });
+
+  it('removes a match.query value that is neither a record nor an array', () => {
+    for (const query of ['page=2', 7, null, true]) {
+      const out = migrateRule(ruleWithMatch({ query }))!;
+      expect('query' in out.match).toBe(false);
+      expect(migrateRules([ruleWithMatch({ query })]).changed).toBe(true);
+    }
+  });
+
+  it('is idempotent for migrated query rows', () => {
+    const raw = legacyRule();
+    (raw.match as Record<string, unknown>).query = { page: '2' };
+    const once = migrateRule(raw)!;
+    const twice = migrateRule(once)!;
+    expect(twice).toEqual(once);
+    expect(migrateRules([once]).changed).toBe(false);
   });
 });
 

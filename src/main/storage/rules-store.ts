@@ -23,7 +23,7 @@ function cloneRule(rule: MockRule): MockRule {
     ...rule,
     match: {
       ...rule.match,
-      ...(query ? { query: { ...query } } : {}),
+      ...(query ? { query: Array.isArray(query) ? cloneRows(query) : { ...query } } : {}),
       ...(headers ? { headers: Array.isArray(headers) ? cloneRows(headers) : { ...headers } } : {}),
       ...(body
         ? {

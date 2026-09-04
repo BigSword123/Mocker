@@ -23,7 +23,7 @@ export interface RuleMatch {
   urlType: UrlPatternType;
   urlPattern: string;
   method: HttpMethod;
-  query?: Record<string, string>;
+  query?: Record<string, string> | HeaderRow[];
   headers?: Record<string, string> | HeaderRow[];
   bodyContains?: string;
   body?: RuleBody;
