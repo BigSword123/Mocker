@@ -70,7 +70,8 @@ test('error template 404 prefills status and body', async () => {
   const statusInput = win.locator('.form-grid label:has-text("响应状态码") + input');
   await expect(statusInput).toHaveValue('404');
   const bodyTextarea = win.locator('textarea[placeholder=\'{"code":0}\']');
-  await expect(bodyTextarea).toContainText('Not Found');
+  // 模板实际 payload：{"error":{"code":"NOT_FOUND",...}}
+  await expect(bodyTextarea).toContainText('NOT_FOUND');
   await closeRuleModal();
 });
 
@@ -101,7 +102,10 @@ test('faker catalog modal inserts snippet', async () => {
   await openNewRuleModal();
   await win.getByRole('button', { name: 'Faker 速查…' }).click();
   await win.getByPlaceholder('搜索方法或关键词').fill('email');
-  await win.getByRole('button', { name: '插入' }).first().click();
+  // 搜索有 150ms 防抖，等过滤结果出现再插入，避免插入未过滤的首行
+  const targetRow = win.locator('.faker-row', { hasText: 'faker.internet.email' });
+  await expect(targetRow).toBeVisible();
+  await targetRow.getByRole('button', { name: '插入' }).click();
   const body = win.locator('textarea[placeholder=\'{"code":0}\']');
   await expect(body).toHaveValue(/faker\.internet\.email/);
   await win.locator('.faker-modal .icon-btn').click();
@@ -115,8 +119,8 @@ test('editable header table adds and deletes rows', async () => {
   await table.getByPlaceholder('Value').first().fill('bar');
   // Auto-appends empty row
   await expect(table.getByPlaceholder('Name')).toHaveCount(2);
-  // Delete first row
-  await table.locator('tr').first().getByRole('button', { name: '删除行' }).click();
+  // Delete first data row（tr.first() 会命中表头行，那里没有删除按钮）
+  await table.locator('tbody tr').first().getByRole('button', { name: '删除行' }).click();
   await expect(table.getByPlaceholder('Name').first()).toHaveValue('');
   await closeRuleModal();
 });
