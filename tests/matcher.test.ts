@@ -15,6 +15,24 @@ function req(overrides: Partial<RequestDescription> = {}): RequestDescription {
 
 const base: RuleMatch = { urlType: 'exact', urlPattern: 'http://api.example.com/users?page=2', method: 'ANY' };
 
+const multipart = [
+  '--BoundaryX',
+  'Content-Disposition: form-data; name="user"',
+  '',
+  'ada',
+  '--BoundaryX',
+  'Content-Disposition: form-data; name="role"',
+  '',
+  'guest',
+  '--BoundaryX',
+  'Content-Disposition: form-data; name="upload"; filename="a.txt"',
+  'Content-Type: text/plain',
+  '',
+  'file content',
+  '--BoundaryX--',
+  '',
+].join('\r\n');
+
 describe('matchRule', () => {
   it('matches exact url', () => {
     expect(matchRule(base, req())).toBe(true);
@@ -175,11 +193,11 @@ describe('matchRule body matching', () => {
     expect(matchRule(badRule, req({ body: '{"a":1}' }))).toBe(false);
   });
 
-  it('mode form-data requires every enabled field and ignores disabled rows', () => {
+  it('mode urlencoded requires every enabled field and ignores disabled rows', () => {
     const m: RuleMatch = {
       ...base,
       body: {
-        mode: 'form-data',
+        mode: 'urlencoded',
         form: [
           { enabled: true, name: 'user', value: 'ada' },
           { enabled: false, name: 'role', value: 'admin' },
@@ -196,6 +214,126 @@ describe('matchRule body matching', () => {
     expect(matchRule(m, req({ body: '' }))).toBe(true);
     const noForm: RuleMatch = { ...base, body: { mode: 'form-data' } };
     expect(matchRule(noForm, req({ body: 'x=1' }))).toBe(true);
+  });
+
+  it('mode form-data matches text fields of a real multipart body', () => {
+    const m: RuleMatch = {
+      ...base,
+      body: { mode: 'form-data', form: [{ enabled: true, name: 'user', value: 'ada' }] },
+    };
+    expect(matchRule(m, req({ body: multipart }))).toBe(true);
+
+    const both: RuleMatch = {
+      ...base,
+      body: {
+        mode: 'form-data',
+        form: [
+          { enabled: true, name: 'user', value: 'ada' },
+          { enabled: true, name: 'role', value: 'guest' },
+        ],
+      },
+    };
+    expect(matchRule(both, req({ body: multipart }))).toBe(true);
+  });
+
+  it('mode form-data fails when an enabled text field mismatches', () => {
+    const m: RuleMatch = {
+      ...base,
+      body: { mode: 'form-data', form: [{ enabled: true, name: 'user', value: 'bob' }] },
+    };
+    expect(matchRule(m, req({ body: multipart }))).toBe(false);
+  });
+
+  it('mode form-data ignores file parts so matching them fails', () => {
+    const m: RuleMatch = {
+      ...base,
+      body: { mode: 'form-data', form: [{ enabled: true, name: 'upload', value: 'file content' }] },
+    };
+    expect(matchRule(m, req({ body: multipart }))).toBe(false);
+  });
+
+  it('mode form-data ignores disabled rows that would not match', () => {
+    const m: RuleMatch = {
+      ...base,
+      body: {
+        mode: 'form-data',
+        form: [
+          { enabled: true, name: 'user', value: 'ada' },
+          { enabled: false, name: 'role', value: 'admin' },
+          { enabled: false, name: 'upload', value: 'file content' },
+        ],
+      },
+    };
+    expect(matchRule(m, req({ body: multipart }))).toBe(true);
+  });
+
+  it('mode form-data does not match urlencoded, empty or malformed bodies', () => {
+    const m: RuleMatch = {
+      ...base,
+      body: { mode: 'form-data', form: [{ enabled: true, name: 'user', value: 'ada' }] },
+    };
+    expect(matchRule(m, req({ body: 'user=ada&role=guest' }))).toBe(false);
+    expect(matchRule(m, req({ body: '' }))).toBe(false);
+    expect(matchRule(m, req({ body: '--BoundaryX' }))).toBe(false);
+    expect(matchRule(m, req({ body: '--BoundaryX\r\nContent-Disposition: form-data; name="user"' }))).toBe(false);
+    const missingTerminator = ['--BoundaryX', 'Content-Disposition: form-data; name="user"', '', 'ada', ''].join(
+      '\r\n',
+    );
+    expect(matchRule(m, req({ body: missingTerminator }))).toBe(false);
+  });
+
+  it('mode form-data handles repeated field names and empty values', () => {
+    const repeated = [
+      '--B',
+      'Content-Disposition: form-data; name="tag"',
+      '',
+      'a',
+      '--B',
+      'Content-Disposition: form-data; name="tag"',
+      '',
+      'b',
+      '--B',
+      'Content-Disposition: form-data; name="note"',
+      '',
+      '',
+      '--B--',
+      '',
+    ].join('\r\n');
+    const tagB: RuleMatch = {
+      ...base,
+      body: { mode: 'form-data', form: [{ enabled: true, name: 'tag', value: 'b' }] },
+    };
+    expect(matchRule(tagB, req({ body: repeated }))).toBe(true);
+
+    const tagC: RuleMatch = {
+      ...base,
+      body: { mode: 'form-data', form: [{ enabled: true, name: 'tag', value: 'c' }] },
+    };
+    expect(matchRule(tagC, req({ body: repeated }))).toBe(false);
+
+    const emptyNote: RuleMatch = {
+      ...base,
+      body: { mode: 'form-data', form: [{ enabled: true, name: 'note', value: '' }] },
+    };
+    expect(matchRule(emptyNote, req({ body: repeated }))).toBe(true);
+  });
+
+  it('mode form-data keeps multi-line and CRLF-containing text values intact', () => {
+    const multiline = [
+      '--B',
+      'Content-Disposition: form-data; name="bio"',
+      'Content-Type: text/plain',
+      '',
+      'line one',
+      'line two',
+      '--B--',
+      '',
+    ].join('\r\n');
+    const m: RuleMatch = {
+      ...base,
+      body: { mode: 'form-data', form: [{ enabled: true, name: 'bio', value: 'line one\r\nline two' }] },
+    };
+    expect(matchRule(m, req({ body: multiline }))).toBe(true);
   });
 
   it('mode urlencoded compares percent-decoded values', () => {

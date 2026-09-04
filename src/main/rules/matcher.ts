@@ -87,8 +87,9 @@ function matchBodyByRule(rule: RuleBody, body: string): boolean {
     case 'raw':
       return matchRawBody(rule, body);
     case 'form-data':
+      return matchMultipartBody(rule.form ?? [], body);
     case 'urlencoded':
-      return matchFormBody(rule.form ?? [], body);
+      return matchUrlencodedBody(rule.form ?? [], body);
     default:
       return true;
   }
@@ -143,9 +144,126 @@ function isJsonObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-function matchFormBody(form: HeaderRow[], body: string): boolean {
+interface FormFields {
+  getAll(name: string): readonly string[];
+}
+
+/** Shared "every enabled row must be present as name=value" evaluation. */
+function matchEnabledFormRows(form: HeaderRow[], parseFields: () => FormFields | null): boolean {
   const enabled = form.filter((row) => row.enabled === true);
   if (enabled.length === 0) return true;
-  const params = new URLSearchParams(body);
-  return enabled.every((row) => params.getAll(row.name).includes(row.value));
+  const fields = parseFields();
+  if (fields === null) return false;
+  return enabled.every((row) => fields.getAll(row.name).includes(row.value));
+}
+
+function matchUrlencodedBody(form: HeaderRow[], body: string): boolean {
+  return matchEnabledFormRows(form, () => new URLSearchParams(body));
+}
+
+function matchMultipartBody(form: HeaderRow[], body: string): boolean {
+  return matchEnabledFormRows(form, () => parseMultipartTextFields(body));
+}
+
+const CRLF = '\r\n';
+const DASHES = '--';
+
+/**
+ * Parses the textual fields of a multipart/form-data body. File parts (parts whose
+ * Content-Disposition carries a filename) are intentionally skipped: matching uploads is
+ * out of scope. Returns null when the body is not a parseable multipart payload.
+ */
+function parseMultipartTextFields(body: string): FormFields | null {
+  const delimiter = readMultipartDelimiter(body);
+  if (delimiter === null) return null;
+  const fields = new Map<string, string[]>();
+  let cursor = delimiter.length;
+  while (cursor < body.length) {
+    if (body.startsWith(DASHES, cursor)) return toFormFields(fields);
+    if (!body.startsWith(CRLF, cursor)) return null;
+    const partStart = cursor + CRLF.length;
+    const partEnd = body.indexOf(CRLF + delimiter, partStart);
+    if (partEnd === -1) return null;
+    if (!collectMultipartPart(body.slice(partStart, partEnd), fields)) return null;
+    cursor = partEnd + CRLF.length + delimiter.length;
+  }
+  return null;
+}
+
+/** Reads the leading `--<boundary>` delimiter, tolerating a body that is only a terminator. */
+function readMultipartDelimiter(body: string): string | null {
+  if (!body.startsWith(DASHES)) return null;
+  const lineEnd = body.indexOf(CRLF);
+  if (lineEnd === -1) return null;
+  const firstLine = body.slice(0, lineEnd);
+  const delimiter = firstLine.endsWith(DASHES) ? firstLine.slice(0, firstLine.length - DASHES.length) : firstLine;
+  return delimiter.length > DASHES.length ? delimiter : null;
+}
+
+function collectMultipartPart(part: string, fields: Map<string, string[]>): boolean {
+  const split = splitMultipartPart(part);
+  if (split === null) return false;
+  const disposition = readContentDisposition(split.headers);
+  if (disposition === null) return true;
+  if (disposition.filename !== undefined) return true;
+  if (disposition.name === undefined) return true;
+  const previous = fields.get(disposition.name);
+  fields.set(disposition.name, previous === undefined ? [split.content] : [...previous, split.content]);
+  return true;
+}
+
+function splitMultipartPart(part: string): { headers: string; content: string } | null {
+  if (part.startsWith(CRLF)) return { headers: '', content: part.slice(CRLF.length) };
+  const blankLine = part.indexOf(CRLF + CRLF);
+  if (blankLine === -1) return null;
+  return { headers: part.slice(0, blankLine), content: part.slice(blankLine + 2 * CRLF.length) };
+}
+
+function readContentDisposition(headers: string): { name: string | undefined; filename: string | undefined } | null {
+  if (headers.length === 0) return null;
+  const line = headers.split(CRLF).find((header) => header.toLowerCase().startsWith('content-disposition:'));
+  if (line === undefined) return null;
+  const params = parseHeaderParams(line.slice(line.indexOf(':') + 1));
+  return { name: params.get('name'), filename: params.get('filename') };
+}
+
+/** Parses `; key=value` / `; key="value"` parameters of a single header value. */
+function parseHeaderParams(value: string): Map<string, string> {
+  const params = new Map<string, string>();
+  let cursor = value.indexOf(';');
+  while (cursor !== -1) {
+    const equals = value.indexOf('=', cursor + 1);
+    if (equals === -1) break;
+    const key = value.slice(cursor + 1, equals).trim().toLowerCase();
+    const parsed = readHeaderParamValue(value, equals + 1);
+    if (key.length > 0 && !params.has(key)) params.set(key, parsed.value);
+    cursor = value.indexOf(';', parsed.end);
+  }
+  return params;
+}
+
+function readHeaderParamValue(value: string, start: number): { value: string; end: number } {
+  let index = start;
+  while (index < value.length && (value[index] === ' ' || value[index] === '\t')) index += 1;
+  if (value[index] !== '"') {
+    const semicolon = value.indexOf(';', index);
+    const end = semicolon === -1 ? value.length : semicolon;
+    return { value: value.slice(index, end).trim(), end };
+  }
+  index += 1;
+  const chars: string[] = [];
+  while (index < value.length && value[index] !== '"') {
+    if (value[index] === '\\' && index + 1 < value.length) {
+      chars.push(value[index + 1] as string);
+      index += 2;
+      continue;
+    }
+    chars.push(value[index] as string);
+    index += 1;
+  }
+  return { value: chars.join(''), end: index < value.length ? index + 1 : value.length };
+}
+
+function toFormFields(fields: ReadonlyMap<string, readonly string[]>): FormFields {
+  return { getAll: (name) => fields.get(name) ?? [] };
 }
