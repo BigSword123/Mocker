@@ -71,7 +71,11 @@ test('converts a captured request into a prefilled rule', async () => {
   await expect(win.getByPlaceholder('http://api.example.com/*')).toHaveValue(TARGET);
   await expect(win.locator('.form-grid label:has-text("响应状态码") + input')).toHaveValue(String(STATUS));
   await expect(win.locator('textarea[placeholder=\'{"code":0}\']')).toHaveValue(BODY);
-  await expect(win.locator('.form-grid label:has-text("响应头") + textarea')).toHaveValue(`content-type: ${CONTENT_TYPE}`);
+  // The response headers are now in a table; check that the content-type row exists
+  const respHeaderTable = win.locator('table[aria-label="响应头"]');
+  await expect(respHeaderTable).toBeVisible();
+  await expect(respHeaderTable.locator('input[value="content-type"]')).toBeVisible();
+  await expect(respHeaderTable.locator('input[value="' + CONTENT_TYPE + '"]')).toBeVisible();
 
   // 保存
   await win.getByRole('button', { name: '保存', exact: true }).click();
