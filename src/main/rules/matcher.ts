@@ -1,4 +1,4 @@
-import type { RuleMatch } from '../../shared/types';
+import type { HeaderRow, RuleMatch } from '../../shared/types';
 
 export interface RequestDescription {
   method: string;
@@ -13,7 +13,7 @@ export function matchRule(match: RuleMatch, req: RequestDescription): boolean {
     matchUrl(match, req.url) &&
     matchMethod(match.method, req.method) &&
     matchQuery(match.query, req.query) &&
-    matchHeaders(match.headers, req.headers) &&
+    matchHeaders(toHeaderRecord(match.headers), req.headers) &&
     matchBody(match.bodyContains, req.body)
   );
 }
@@ -58,6 +58,14 @@ function matchMethod(ruleMethod: string, actual: string): boolean {
 function matchQuery(expected: Record<string, string> | undefined, query: URLSearchParams): boolean {
   if (!expected) return true;
   return Object.entries(expected).every(([k, v]) => query.getAll(k).includes(v));
+}
+
+function toHeaderRecord(
+  headers: Record<string, string> | HeaderRow[] | undefined,
+): Record<string, string> | undefined {
+  if (!headers) return undefined;
+  if (!Array.isArray(headers)) return headers;
+  return Object.fromEntries(headers.filter((h) => h.enabled).map((h) => [h.name, h.value]));
 }
 
 function matchHeaders(expected: Record<string, string> | undefined, headers: Record<string, string>): boolean {

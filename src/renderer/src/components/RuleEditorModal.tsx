@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   DELAY_MS_MAX,
   NETWORK_ERROR_TYPES,
+  type HeaderRow,
   type HttpMethod,
   type MockRule,
   type NetworkErrorType,
@@ -43,6 +44,13 @@ function formatLines(map: Record<string, string> | undefined, sep: string): stri
     .join('\n');
 }
 
+function toHeaderRecord(
+  headers: Record<string, string> | HeaderRow[] | undefined,
+): Record<string, string> | undefined {
+  if (!headers || !Array.isArray(headers)) return headers;
+  return Object.fromEntries(headers.filter((h) => h.enabled).map((h) => [h.name, h.value]));
+}
+
 interface Props {
   initial: MockRule | null;
   draft?: RuleInput;
@@ -58,7 +66,7 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
   const [urlPattern, setUrlPattern] = useState(seed?.match.urlPattern ?? '');
   const [method, setMethod] = useState<HttpMethod>(seed?.match.method ?? 'ANY');
   const [queryText, setQueryText] = useState(formatLines(seed?.match.query, '='));
-  const [headersText, setHeadersText] = useState(formatLines(seed?.match.headers, ': '));
+  const [headersText, setHeadersText] = useState(formatLines(toHeaderRecord(seed?.match.headers), ': '));
   const [bodyContains, setBodyContains] = useState(seed?.match.bodyContains ?? '');
   const [status, setStatus] = useState(seed?.action.status ?? 200);
   const [respHeadersText, setRespHeadersText] = useState(formatLines(seed?.action.headers, ': '));
