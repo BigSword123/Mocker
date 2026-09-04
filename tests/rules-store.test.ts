@@ -1,9 +1,9 @@
-import { mkdtemp, readdir, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { RulesStore } from '../src/main/storage/rules-store';
-import type { HeaderRow, RuleInput } from '../src/shared/types';
+import type { HeaderRow, MockRule, RuleInput } from '../src/shared/types';
 
 let dir: string;
 
@@ -183,5 +183,150 @@ describe('RulesStore', () => {
       mode: 'form-data',
       form: [{ enabled: true, name: 'f', value: '1' }],
     });
+  });
+});
+
+describe('RulesStore migration on load', () => {
+  const rulesPath = () => join(dir, 'rules.json');
+  const backupPath = () => join(dir, 'rules.json.v1-bak');
+
+  const legacyPersisted = (id: string): Record<string, unknown> => ({
+    id,
+    name: id,
+    enabled: true,
+    priority: 1,
+    match: {
+      urlType: 'exact',
+      urlPattern: `http://x.com/${id}`,
+      method: 'ANY',
+      headers: { 'X-Legacy': 'yes' },
+      bodyContains: 'needle',
+    },
+    action: { status: 200, headers: {}, body: id },
+  });
+
+  const modernPersisted = (id: string): MockRule => ({
+    id,
+    name: id,
+    enabled: true,
+    priority: 2,
+    match: {
+      urlType: 'wildcard',
+      urlPattern: `http://x.com/${id}/*`,
+      method: 'POST',
+      headers: [{ enabled: false, name: 'X-Modern', value: 'row' }],
+      body: { mode: 'raw', raw: '{"a":1}', matchStrategy: 'json-deep' },
+    },
+    action: { status: 202, headers: {}, body: id },
+  });
+
+  async function seed(rules: unknown[], indent?: number): Promise<string> {
+    const text = JSON.stringify(rules, null, indent);
+    await writeFile(rulesPath(), text, 'utf8');
+    return text;
+  }
+
+  it('converts legacy headers and bodyContains and backs up the original byte-for-byte', async () => {
+    const original = await seed([legacyPersisted('a')]);
+
+    const store = new RulesStore(dir);
+    await store.load();
+
+    const listed = store.list();
+    expect(listed).toHaveLength(1);
+    expect(listed[0].match.headers).toEqual([
+      { enabled: true, name: 'X-Legacy', value: 'yes', description: '' },
+    ]);
+    expect(listed[0].match.body).toEqual({ mode: 'raw', raw: 'needle', matchStrategy: 'contains' });
+    expect(listed[0].match.bodyContains).toBeUndefined();
+
+    expect(await readFile(backupPath(), 'utf8')).toBe(original);
+
+    const persisted = JSON.parse(await readFile(rulesPath(), 'utf8')) as MockRule[];
+    expect(persisted).toHaveLength(1);
+    expect(Array.isArray(persisted[0].match.headers)).toBe(true);
+    expect((persisted[0].match.headers as HeaderRow[])[0].name).toBe('X-Legacy');
+    expect(persisted[0].match.body).toEqual({ mode: 'raw', raw: 'needle', matchStrategy: 'contains' });
+    expect('bodyContains' in persisted[0].match).toBe(false);
+  });
+
+  it('does not overwrite a pre-existing .v1-bak backup', async () => {
+    await seed([legacyPersisted('a')]);
+    await writeFile(backupPath(), 'earlier backup', 'utf8');
+
+    const store = new RulesStore(dir);
+    await store.load();
+
+    expect(await readFile(backupPath(), 'utf8')).toBe('earlier backup');
+    expect(store.list()[0].match.body).toEqual({ mode: 'raw', raw: 'needle', matchStrategy: 'contains' });
+    const persisted = JSON.parse(await readFile(rulesPath(), 'utf8')) as MockRule[];
+    expect(persisted[0].match.headers).toEqual([
+      { enabled: true, name: 'X-Legacy', value: 'yes', description: '' },
+    ]);
+  });
+
+  it('migrates legacy entries in a mixed file while keeping modern ones', async () => {
+    await seed([legacyPersisted('legacy'), modernPersisted('modern')], 2);
+
+    const store = new RulesStore(dir);
+    await store.load();
+
+    const persisted = JSON.parse(await readFile(rulesPath(), 'utf8')) as MockRule[];
+    expect(persisted.map((r) => r.id)).toEqual(['legacy', 'modern']);
+    expect(persisted[0].match.headers).toEqual([
+      { enabled: true, name: 'X-Legacy', value: 'yes', description: '' },
+    ]);
+    expect(persisted[0].match.body).toEqual({ mode: 'raw', raw: 'needle', matchStrategy: 'contains' });
+    expect(persisted[1].match.headers).toEqual([{ enabled: false, name: 'X-Modern', value: 'row' }]);
+    expect(persisted[1].match.body).toEqual({ mode: 'raw', raw: '{"a":1}', matchStrategy: 'json-deep' });
+    expect(await readFile(backupPath(), 'utf8')).toBeTruthy();
+  });
+
+  it('skips broken entries, keeps the good ones and persists the filtered array', async () => {
+    const original = await seed(['broken', legacyPersisted('good'), { id: 5 }, modernPersisted('ok')]);
+
+    const store = new RulesStore(dir);
+    await store.load();
+
+    expect(store.list().map((r) => r.id)).toEqual(['good', 'ok']);
+    const persisted = JSON.parse(await readFile(rulesPath(), 'utf8')) as MockRule[];
+    expect(persisted.map((r) => r.id)).toEqual(['good', 'ok']);
+    expect(await readFile(backupPath(), 'utf8')).toBe(original);
+  });
+
+  it('is idempotent across loads: a second load rewrites nothing', async () => {
+    await seed([legacyPersisted('a')], 2);
+
+    await new RulesStore(dir).load();
+    const migrated = await readFile(rulesPath(), 'utf8');
+    const backup = await readFile(backupPath(), 'utf8');
+
+    const second = new RulesStore(dir);
+    await second.load();
+
+    expect(await readFile(rulesPath(), 'utf8')).toBe(migrated);
+    expect(await readFile(backupPath(), 'utf8')).toBe(backup);
+    expect(second.list()[0].match.body).toEqual({ mode: 'raw', raw: 'needle', matchStrategy: 'contains' });
+  });
+
+  it('does not rewrite or back up a rules.json that needs no migration', async () => {
+    const original = await seed([modernPersisted('modern')], 2);
+
+    const store = new RulesStore(dir);
+    await store.load();
+
+    expect(store.list().map((r) => r.id)).toEqual(['modern']);
+    expect(await readFile(rulesPath(), 'utf8')).toBe(original);
+    expect(await readdir(dir)).toEqual(['rules.json']);
+  });
+
+  it('loads normally when rules.json does not exist and creates no backup', async () => {
+    const store = new RulesStore(dir);
+    await store.load();
+
+    expect(store.list()).toEqual([]);
+    expect(await readdir(dir)).toEqual([]);
+    await store.add(input('a'));
+    expect(store.list().map((r) => r.name)).toEqual(['a']);
   });
 });

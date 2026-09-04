@@ -1,10 +1,12 @@
 import { randomUUID } from 'node:crypto';
-import { promises as fs } from 'node:fs';
+import { constants as fsConstants, promises as fs } from 'node:fs';
 import * as path from 'node:path';
 import type { MockRule, RuleInput, RulePatch } from '../../shared/types';
 import { JsonStore } from './json-store';
+import { migrateRules } from './migrate';
 
 const MAX_SNAPSHOTS = 50;
+const LEGACY_BACKUP_SUFFIX = '.v1-bak';
 
 function cloneRule(rule: MockRule): MockRule {
   return {
@@ -39,16 +41,49 @@ function cloneRule(rule: MockRule): MockRule {
 export class RulesStore {
   private rules: MockRule[] = [];
   private readonly store: JsonStore<MockRule[]>;
+  private readonly rulesPath: string;
   private readonly snapshotsDir: string;
   private listeners = new Set<() => void>();
 
   constructor(dataDir: string) {
-    this.store = new JsonStore<MockRule[]>(path.join(dataDir, 'rules.json'), []);
+    this.rulesPath = path.join(dataDir, 'rules.json');
+    this.store = new JsonStore<MockRule[]>(this.rulesPath, []);
     this.snapshotsDir = path.join(dataDir, 'snapshots');
   }
 
   async load(): Promise<void> {
-    this.rules = await this.store.read();
+    const raw = (await this.store.read()) as unknown[];
+    const { rules, skipped, changed } = migrateRules(raw);
+    this.rules = rules;
+    if (!changed && skipped === 0) return;
+    // The in-memory rules are already migrated, so persisting them is best-effort: an unwritable
+    // data dir must not stop the app from starting, and the next mutation persists again anyway.
+    if (!(await this.backupBeforeMigration())) return;
+    try {
+      await this.store.write(this.rules);
+    } catch {
+      // keep the migrated rules in memory; the original file stays intact next to its backup
+    }
+  }
+
+  /**
+   * Makes the one-time exact copy of the pre-migration rules.json and reports whether rewriting
+   * the file is safe. The exclusive copy keeps an existing backup (from an earlier migration)
+   * untouched; a missing source file has nothing to protect. Any other failure means the original
+   * is unprotected, so the caller must not rewrite it.
+   */
+  private async backupBeforeMigration(): Promise<boolean> {
+    try {
+      await fs.copyFile(
+        this.rulesPath,
+        `${this.rulesPath}${LEGACY_BACKUP_SUFFIX}`,
+        fsConstants.COPYFILE_EXCL,
+      );
+      return true;
+    } catch (err: unknown) {
+      const code = (err as NodeJS.ErrnoException).code;
+      return code === 'EEXIST' || code === 'ENOENT';
+    }
   }
 
   list(): MockRule[] {
