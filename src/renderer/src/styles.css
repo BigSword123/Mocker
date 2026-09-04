@@ -181,3 +181,37 @@ table.kv .k { color: #8ab4ff; width: 200px; }
 .editable-table tr.disabled td input:not([type]) {
   text-decoration: line-through;
 }
+
+.body-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+.body-tabs .tab {
+  padding: 4px 12px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: #f5f5f5;
+  cursor: pointer;
+}
+.body-tabs .tab.active {
+  background: #2563eb;
+  color: white;
+  border-color: #2563eb;
+}
+.body-options {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 6px;
+  font-size: 12px;
+}
+.body-options label {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.hint {
+  color: #888;
+  font-size: 12px;
+  padding: 8px;
+}

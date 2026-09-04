@@ -2,12 +2,15 @@ import { useRef, useState } from 'react';
 import {
   DELAY_MS_MAX,
   NETWORK_ERROR_TYPES,
+  type BodyMatchStrategy,
+  type BodyMode,
   type HeaderRow,
   type HttpMethod,
   type MockRule,
   type NetworkErrorType,
   type RenderContext,
   type RuleAction,
+  type RuleBody,
   type RuleInput,
   type UrlPatternType,
 } from '../../../shared/types';
@@ -81,7 +84,12 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
     }
     return [{ enabled: true, name: '', value: '', description: '' }];
   });
-  const [bodyContains, setBodyContains] = useState(seed?.match.bodyContains ?? '');
+  const seedBody: RuleBody = seed?.match.body ?? {
+    mode: seed?.match.bodyContains ? 'raw' : 'none',
+    raw: seed?.match.bodyContains ?? '',
+    matchStrategy: 'contains',
+  };
+  const [bodyRule, setBodyRule] = useState<RuleBody>(seedBody);
   const [status, setStatus] = useState(seed?.action.status ?? 200);
   const [respHeadersRows, setRespHeadersRows] = useState<HeaderRow[]>(() => {
     if (seed?.action.headers) {
@@ -185,6 +193,21 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
       setError(String(err));
       return;
     }
+    const matchBody: RuleBody | undefined =
+      bodyRule.mode === 'none'
+        ? undefined
+        : bodyRule.mode === 'raw'
+          ? {
+              mode: 'raw',
+              raw: bodyRule.raw,
+              rawContentType: bodyRule.rawContentType,
+              matchStrategy: bodyRule.matchStrategy,
+            }
+          : {
+              mode: bodyRule.mode,
+              form: bodyRule.form?.filter((r) => r.name || r.value),
+            };
+
     const input: RuleInput = {
       name: name.trim() || urlPattern,
       enabled: initial?.enabled ?? true,
@@ -194,7 +217,7 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
         method,
         query: Object.keys(query).length ? query : undefined,
         headers: headersRows.some((r) => r.name || r.value) ? headersRows : undefined,
-        bodyContains: bodyContains || undefined,
+        body: matchBody,
       },
       action,
     };
@@ -263,8 +286,66 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
           <textarea rows={2} value={queryText} onChange={(e) => setQueryText(e.target.value)} />
           <label>请求头</label>
           <EditableTable rows={headersRows} onChange={setHeadersRows} ariaLabel="请求头" />
-          <label>请求体包含</label>
-          <input value={bodyContains} onChange={(e) => setBodyContains(e.target.value)} />
+          <label>请求体</label>
+          <div className="body-tabs">
+            {(['none', 'raw', 'form-data', 'urlencoded'] as BodyMode[]).map((m) => (
+              <button
+                key={m}
+                type="button"
+                className={`tab ${bodyRule.mode === m ? 'active' : ''}`}
+                onClick={() =>
+                  setBodyRule({
+                    ...bodyRule,
+                    mode: m,
+                    form: bodyRule.form ?? [{ enabled: true, name: '', value: '', description: '' }],
+                  })
+                }
+              >
+                {m === 'none' ? '无' : m === 'raw' ? 'raw' : m === 'form-data' ? 'form-data' : 'x-www-form'}
+              </button>
+            ))}
+          </div>
+          {bodyRule.mode === 'none' && <div className="hint">此规则不匹配请求体</div>}
+          {bodyRule.mode === 'raw' && (
+            <>
+              <div className="body-options">
+                <label>
+                  内容类型
+                  <input
+                    value={bodyRule.rawContentType ?? 'application/json'}
+                    onChange={(e) => setBodyRule({ ...bodyRule, rawContentType: e.target.value })}
+                  />
+                </label>
+                <label>
+                  匹配策略
+                  <select
+                    value={bodyRule.matchStrategy ?? 'contains'}
+                    onChange={(e) =>
+                      setBodyRule({ ...bodyRule, matchStrategy: e.target.value as BodyMatchStrategy })
+                    }
+                  >
+                    <option value="contains">包含</option>
+                    <option value="equals">完全相等</option>
+                    <option value="json-deep">JSON 深度相等</option>
+                  </select>
+                </label>
+              </div>
+              <textarea
+                rows={8}
+                value={bodyRule.raw ?? ''}
+                onChange={(e) => setBodyRule({ ...bodyRule, raw: e.target.value })}
+                placeholder='{"keyword": "test"}'
+              />
+            </>
+          )}
+          {(bodyRule.mode === 'form-data' || bodyRule.mode === 'urlencoded') && (
+            <EditableTable
+              rows={bodyRule.form ?? [{ enabled: true, name: '', value: '', description: '' }]}
+              onChange={(form) => setBodyRule({ ...bodyRule, form })}
+              columns={{ description: false }}
+              ariaLabel="请求体表单"
+            />
+          )}
           <label>响应状态码</label>
           <input
             type="number"
