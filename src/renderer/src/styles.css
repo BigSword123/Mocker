@@ -249,3 +249,208 @@ table.kv .k { color: #8ab4ff; width: 200px; }
   font-size: 12px;
   padding: 8px;
 }
+
+.json-editor-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.json-editor-tabs {
+  display: flex;
+  gap: 4px;
+}
+.json-editor-tabs .tab {
+  padding: 3px 12px;
+  border: 1px solid #4a4b55;
+  border-radius: 4px;
+  background: #26272e;
+  color: #c9cad4;
+}
+.json-editor-tabs .tab.active {
+  background: #3b6ef6;
+  color: white;
+  border-color: #3b6ef6;
+}
+.json-editor-bar > button {
+  font-size: 12px;
+  padding: 3px 10px;
+}
+.json-editor-error {
+  font-size: 12px;
+  word-break: break-all;
+}
+.json-editor-box {
+  position: relative;
+  border: 1px solid #4a4b55;
+  border-radius: 6px;
+  background: #26272e;
+}
+.json-editor-box textarea {
+  display: block;
+  width: 100%;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.json-editor-box.has-hl textarea {
+  color: transparent;
+  caret-color: #e2e2e8;
+}
+.json-editor-box.has-hl textarea::placeholder {
+  color: #6f7078;
+}
+/* 高亮层与 textarea 必须同字体、同换行规则，否则逐字符错位 */
+.json-hl {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 5px 8px;
+  overflow: hidden;
+  pointer-events: none;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: #e2e2e8;
+  border-radius: 6px;
+}
+.json-tk-punct { color: #9b9ca6; }
+.json-d0 { color: #8ab4ff; }
+.json-d1 { color: #7ee787; }
+.json-d2 { color: #ffab70; }
+.json-d3 { color: #f692ce; }
+.json-d4 { color: #d2a8ff; }
+.json-d5 { color: #e3b341; }
+
+.json-tree {
+  border: 1px solid #4a4b55;
+  border-radius: 6px;
+  background: #26272e;
+  padding: 6px 8px;
+  max-height: 384px;
+  overflow: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+.json-tree-error {
+  border: 1px solid #4a4b55;
+  border-radius: 6px;
+  background: #26272e;
+  padding: 10px;
+  font-size: 12px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  word-break: break-all;
+}
+.json-tree-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 0;
+  min-width: max-content;
+}
+.json-tree-children {
+  margin-left: 14px;
+  padding-left: 10px;
+  border-left: 1px dashed #3a3b45;
+}
+.json-tree-toggle {
+  background: transparent;
+  border: 0;
+  padding: 0 4px;
+  color: #9b9ca6;
+  width: 18px;
+}
+.json-tree-toggle:hover {
+  background: transparent;
+  color: #e2e2e8;
+}
+.json-tree-toggle-space {
+  width: 18px;
+  flex: none;
+}
+.json-tree-key {
+  width: 140px;
+  background: #1e1f24;
+  border: 1px solid #3a3b45;
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-family: inherit;
+  font-size: 12px;
+}
+.json-tree-index {
+  color: #9b9ca6;
+  min-width: 18px;
+  text-align: right;
+}
+.json-tree-root-label {
+  padding: 0 2px;
+}
+.json-tree-badge {
+  font-weight: 600;
+}
+.json-tree-meta {
+  font-size: 11px;
+}
+.json-tree-add {
+  font-size: 11px;
+  padding: 1px 8px;
+  white-space: nowrap;
+}
+/* .form-grid input { width: 100% } 会穿透进来，需以更高优先级压回定宽 */
+.json-tree .json-tree-key {
+  width: 140px;
+}
+.json-tree .json-tree-value input[type='text'] {
+  width: 180px;
+  min-width: 180px;
+}
+.json-tree .json-tree-value select {
+  width: auto;
+  min-width: 64px;
+}
+.json-tree-value {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.json-tree-value select {
+  font-size: 11px;
+  padding: 1px 4px;
+  background: #1e1f24;
+}
+.json-tree-value input[type='text'] {
+  background: #1e1f24;
+  border: 1px solid #3a3b45;
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-family: inherit;
+  font-size: 12px;
+  min-width: 120px;
+}
+.json-tree-bool {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.json-tree-null {
+  color: #9b9ca6;
+}
+.json-tree-del {
+  background: transparent;
+  border: 0;
+  color: #8a8b96;
+  padding: 0 4px;
+}
+.json-tree-del:hover {
+  color: #e3342f;
+  background: transparent;
+}

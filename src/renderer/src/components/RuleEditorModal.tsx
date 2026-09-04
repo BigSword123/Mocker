@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   DELAY_MS_MAX,
   NETWORK_ERROR_TYPES,
@@ -28,6 +28,8 @@ import {
 } from '../lib/error-template-apply';
 import EditableTable from './EditableTable';
 import FakerCatalogModal from './FakerCatalogModal';
+import JsonBodyEditor, { JsonSpans } from './JsonBodyEditor';
+import { parseJsonBody, tokenizeJson } from '../lib/json-format';
 
 const METHODS: HttpMethod[] = ['ANY', 'GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'];
 const URL_TYPES: Array<{ value: UrlPatternType; label: string }> = [
@@ -127,6 +129,7 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
     seed?.action.networkError?.errorStatusCode ?? '',
   );
   const [preview, setPreview] = useState('');
+  const previewTokens = useMemo(() => tokenizeJson(preview), [preview]);
   const [previewWarnings, setPreviewWarnings] = useState<string[]>([]);
   const [fakerOpen, setFakerOpen] = useState(false);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
@@ -258,7 +261,8 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
         context,
         fakerLocale: fakerLocale || undefined,
       });
-      setPreview(result.rendered);
+      const parsed = parseJsonBody(result.rendered);
+      setPreview(parsed.ok ? JSON.stringify(parsed.value, null, 2) : result.rendered);
       setPreviewWarnings(result.warnings);
     } catch (err) {
       setPreview(`预览失败: ${String(err)}`);
@@ -342,11 +346,12 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
                   </select>
                 </label>
               </div>
-              <textarea
+              <JsonBodyEditor
                 rows={12}
                 value={bodyRule.raw ?? ''}
-                onChange={(e) => setBodyRule({ ...bodyRule, raw: e.target.value })}
+                onChange={(raw) => setBodyRule({ ...bodyRule, raw })}
                 placeholder='{"keyword": "test"}'
+                ariaLabel="请求体"
               />
             </>
           )}
@@ -379,17 +384,18 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
             ariaLabel="响应头"
           />
           <label>响应体</label>
-          <textarea
-            ref={bodyRef}
+          <JsonBodyEditor
             rows={16}
             value={body}
             disabled={connectionOnly}
-            aria-describedby={connectionOnly ? CONNECTION_NOTE_ID : undefined}
-            onChange={(e) => {
-              setBody(e.target.value);
+            describedBy={connectionOnly ? CONNECTION_NOTE_ID : undefined}
+            textareaRef={bodyRef}
+            onChange={(v) => {
+              setBody(v);
               clearTemplate();
             }}
             placeholder='{"code":0}'
+            ariaLabel="响应体"
           />
           {connectionOnly && (
             <p className="form-note" id={CONNECTION_NOTE_ID}>
@@ -417,7 +423,9 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
             <label>渲染预览</label>
             <div>
               <button type="button" onClick={refreshPreview}>刷新预览</button>
-              <pre className="preview">{preview || '(点击"刷新预览"查看)'}</pre>
+              <pre className="preview">
+                {preview ? <JsonSpans tokens={previewTokens} /> : '(点击"刷新预览"查看)'}
+              </pre>
               {previewWarnings.length > 0 && (
                 <ul className="text-warn">
                   {previewWarnings.map((w, i) => <li key={i}>{w}</li>)}
