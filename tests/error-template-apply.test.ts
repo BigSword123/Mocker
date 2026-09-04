@@ -4,19 +4,27 @@ import {
   RESPONSE_STATUS_MESSAGE,
   applyErrorTemplate,
   isConnectionTemplateId,
-  mergeHeaderText,
+  mergeHeaderRows,
   responseStatusError,
   type ErrorTemplateFields,
 } from '../src/renderer/src/lib/error-template-apply';
-import { buildResponseHeaders } from '../src/renderer/src/lib/rule-match-edit';
+import type { HeaderRow } from '../src/shared/types';
 import { findById } from '../src/shared/error-templates';
+
+function row(name: string, value: string, enabled = true): HeaderRow {
+  return { enabled, name, value, description: '' };
+}
+
+function textFromRows(rows: HeaderRow[]): string {
+  return rows.map((r) => `${r.name}: ${r.value}`).join('\n');
+}
 
 /** The editor state of a hand-authored rule: 200 + a JSON body and one custom response header. */
 function handAuthored(overrides: Partial<ErrorTemplateFields> = {}): ErrorTemplateFields {
   return {
     status: 200,
     body: '{"code":0}',
-    respHeadersText: 'x-trace: abc',
+    respHeadersRows: [row('x-trace', 'abc')],
     neEnabled: false,
     neProbability: 100,
     neType: 'ECONNRESET',
@@ -56,96 +64,107 @@ describe('applyErrorTemplate on an http template', () => {
 
   it('adds content-type: application/json while keeping unrelated response headers', () => {
     const next = applyErrorTemplate(handAuthored(), template('http-404'));
-    expect(next.respHeadersText).toBe('x-trace: abc\ncontent-type: application/json');
+    expect(textFromRows(next.respHeadersRows)).toBe('x-trace: abc\ncontent-type: application/json');
   });
 
   it('leaves an existing content-type untouched, whatever its casing', () => {
     const next = applyErrorTemplate(
-      handAuthored({ respHeadersText: 'Content-Type: text/xml' }),
+      handAuthored({ respHeadersRows: [row('Content-Type', 'text/xml')] }),
       template('http-404'),
     );
-    expect(next.respHeadersText).toBe('Content-Type: text/xml');
+    expect(textFromRows(next.respHeadersRows)).toBe('Content-Type: text/xml');
   });
 
   it('merges the retry-after header of the throttling preset', () => {
     const next = applyErrorTemplate(handAuthored(), template('http-429'));
-    expect(next.respHeadersText).toBe('x-trace: abc\nretry-after: 60\ncontent-type: application/json');
+    expect(textFromRows(next.respHeadersRows)).toBe('x-trace: abc\nretry-after: 60\ncontent-type: application/json');
   });
 
   it('overwrites an existing retry-after value in place', () => {
     const next = applyErrorTemplate(
-      handAuthored({ respHeadersText: 'Retry-After: 1\nx-trace: abc' }),
+      handAuthored({ respHeadersRows: [row('Retry-After', '1'), row('x-trace', 'abc')] }),
       template('http-503'),
     );
-    expect(next.respHeadersText).toBe('Retry-After: 30\nx-trace: abc\ncontent-type: application/json');
+    expect(textFromRows(next.respHeadersRows)).toBe('Retry-After: 30\nx-trace: abc\ncontent-type: application/json');
   });
 
-  it('writes a single header line when the response headers were empty', () => {
-    const next = applyErrorTemplate(handAuthored({ respHeadersText: '' }), template('http-404'));
-    expect(next.respHeadersText).toBe('content-type: application/json');
+  it('writes a single header when the response headers were empty', () => {
+    const next = applyErrorTemplate(handAuthored({ respHeadersRows: [] }), template('http-404'));
+    expect(textFromRows(next.respHeadersRows)).toBe('content-type: application/json');
   });
 
   it('does not mutate the fields it was given', () => {
     const fields = handAuthored();
-    const snapshot = { ...fields };
+    const snapshot = { ...fields, respHeadersRows: [...fields.respHeadersRows] };
     applyErrorTemplate(fields, template('http-429'));
-    expect(fields).toEqual(snapshot);
+    expect(fields.respHeadersRows).toEqual(snapshot.respHeadersRows);
   });
 });
 
 describe('an applied http template through the action-header serialisation', () => {
-  /** The `action.headers` a save would store after applying `id` to `respHeadersText`. */
-  function savedHeaders(respHeadersText: string, id: string): Record<string, string> {
-    const next = applyErrorTemplate(handAuthored({ respHeadersText }), template(id));
-    return buildResponseHeaders(next.respHeadersText);
+  /** The `action.headers` a save would store after applying `id` to respHeadersRows. */
+  function savedHeaders(inputRows: HeaderRow[], id: string): Record<string, string> {
+    const next = applyErrorTemplate(handAuthored({ respHeadersRows: inputRows }), template(id));
+    const headers: Record<string, string> = {};
+    const hasContentType = next.respHeadersRows.some(
+      (r) => r.enabled && r.name && r.name.toLowerCase() === 'content-type',
+    );
+    if (!hasContentType) headers['content-type'] = 'application/json';
+    for (const r of next.respHeadersRows.filter((r) => r.enabled && r.name)) {
+      headers[r.name] = r.value;
+    }
+    return headers;
   }
 
   it('stores the json content type the template guarantees', () => {
-    expect(savedHeaders('x-trace: abc', 'http-404')).toEqual({
+    expect(savedHeaders([row('x-trace', 'abc')], 'http-404')).toEqual({
       'x-trace': 'abc',
       'content-type': 'application/json',
     });
   });
 
   it('stores a user content-type once, without a lowercase duplicate', () => {
-    expect(savedHeaders('Content-Type: text/xml', 'http-404')).toEqual({ 'Content-Type': 'text/xml' });
+    expect(savedHeaders([row('Content-Type', 'text/xml')], 'http-404')).toEqual({ 'Content-Type': 'text/xml' });
   });
 
   it('stores a user content-type once whatever its casing', () => {
-    expect(savedHeaders('CONTENT-TYPE: text/xml\nx-trace: abc', 'http-500')).toEqual({
+    expect(savedHeaders([row('CONTENT-TYPE', 'text/xml'), row('x-trace', 'abc')], 'http-500')).toEqual({
       'CONTENT-TYPE': 'text/xml',
       'x-trace': 'abc',
     });
   });
 
   it('stores the template retry-after next to the default content type', () => {
-    expect(savedHeaders('', 'http-429')).toEqual({
+    expect(savedHeaders([], 'http-429')).toEqual({
       'retry-after': '60',
       'content-type': 'application/json',
     });
   });
 });
 
-describe('an applied http template over duplicate header lines', () => {
-  it('rewrites every duplicate so the serialised value is the template one', () => {
+describe('an applied http template over duplicate header rows', () => {
+  it('updates every duplicate row so the serialised value is the template one', () => {
     const next = applyErrorTemplate(
-      handAuthored({ respHeadersText: 'Retry-After: 1\nretry-after: 2' }),
+      handAuthored({ respHeadersRows: [row('Retry-After', '1'), row('retry-after', '2')] }),
       template('http-503'),
     );
-    expect(next.respHeadersText).toBe('Retry-After: 30\nretry-after: 30\ncontent-type: application/json');
-    const headers = buildResponseHeaders(next.respHeadersText);
-    expect(Object.entries(headers).filter(([name]) => name.toLowerCase() === 'retry-after')).toEqual([
-      ['Retry-After', '30'],
-      ['retry-after', '30'],
-    ]);
+    expect(textFromRows(next.respHeadersRows)).toBe('Retry-After: 30\nretry-after: 30\ncontent-type: application/json');
   });
 
-  it('rewrites duplicates of the same spelling too', () => {
-    expect(mergeHeaderText('a: 1\nb: 2\na: 3', { a: '9' })).toBe('a: 9\nb: 2\na: 9');
+  it('updates duplicates of the same spelling too', () => {
+    const result = mergeHeaderRows(
+      [row('a', '1'), row('b', '2'), row('a', '3')],
+      { a: '9' },
+    );
+    expect(textFromRows(result)).toBe('a: 9\nb: 2\na: 9');
   });
 
-  it('does not append an override that only duplicate lines carried', () => {
-    expect(mergeHeaderText('a: 1\na: 2', { a: '9' })).toBe('a: 9\na: 9');
+  it('updates every row that carries the overridden name', () => {
+    const result = mergeHeaderRows(
+      [row('a', '1'), row('a', '2')],
+      { a: '9' },
+    );
+    expect(textFromRows(result)).toBe('a: 9\na: 9');
   });
 });
 
@@ -162,14 +181,14 @@ describe('applyErrorTemplate on a connection template', () => {
     const next = applyErrorTemplate(fields, template('conn-truncate'));
     expect(next.status).toBe(201);
     expect(next.body).toBe('{"ok":true}');
-    expect(next.respHeadersText).toBe('x-trace: abc');
+    expect(textFromRows(next.respHeadersRows)).toBe('x-trace: abc');
   });
 
   it('does not mutate the fields it was given', () => {
     const fields = handAuthored();
-    const snapshot = { ...fields };
+    const snapshot = { ...fields, respHeadersRows: [...fields.respHeadersRows] };
     applyErrorTemplate(fields, template('conn-econnreset'));
-    expect(fields).toEqual(snapshot);
+    expect(fields.respHeadersRows).toEqual(snapshot.respHeadersRows);
   });
 });
 
@@ -205,29 +224,24 @@ describe('responseStatusError', () => {
   });
 });
 
-describe('mergeHeaderText', () => {
+describe('mergeHeaderRows', () => {
   it('appends overrides that are absent', () => {
-    expect(mergeHeaderText('a: 1', { b: '2' })).toBe('a: 1\nb: 2');
+    const result = mergeHeaderRows([row('a', '1')], { b: '2' });
+    expect(textFromRows(result)).toBe('a: 1\nb: 2');
   });
 
   it('updates a present header in place and keeps its original name casing', () => {
-    expect(mergeHeaderText('A-Header: 1\nb: 2', { 'a-header': '9' })).toBe('A-Header: 9\nb: 2');
+    const result = mergeHeaderRows([row('A-Header', '1'), row('b', '2')], { 'a-header': '9' });
+    expect(textFromRows(result)).toBe('A-Header: 9\nb: 2');
   });
 
   it('adds a fallback only when the header is absent', () => {
-    expect(mergeHeaderText('a: 1', {}, { b: '2' })).toBe('a: 1\nb: 2');
-    expect(mergeHeaderText('B: keep', {}, { b: '2' })).toBe('B: keep');
+    expect(textFromRows(mergeHeaderRows([row('a', '1')], {}, { b: '2' }))).toBe('a: 1\nb: 2');
+    expect(textFromRows(mergeHeaderRows([row('B', 'keep')], {}, { b: '2' }))).toBe('B: keep');
   });
 
-  it('leaves lines the k: v convention cannot parse alone', () => {
-    expect(mergeHeaderText('# note\na: 1', { b: '2' })).toBe('# note\na: 1\nb: 2');
-  });
-
-  it('does not append after a trailing blank line', () => {
-    expect(mergeHeaderText('a: 1\n', { b: '2' })).toBe('a: 1\nb: 2');
-  });
-
-  it('returns the text unchanged when there is nothing to merge', () => {
-    expect(mergeHeaderText('a: 1\n', {})).toBe('a: 1\n');
+  it('returns the rows unchanged when there is nothing to merge', () => {
+    const result = mergeHeaderRows([row('a', '1')], {});
+    expect(textFromRows(result)).toBe('a: 1');
   });
 });

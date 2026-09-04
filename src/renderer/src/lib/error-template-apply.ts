@@ -1,6 +1,6 @@
 import { findById, type ErrorTemplate } from '../../../shared/error-templates';
-import type { NetworkErrorType } from '../../../shared/types';
-import { DEFAULT_RESPONSE_CONTENT_TYPE, HEADER_LINE_SEP } from './rule-match-edit';
+import type { HeaderRow, NetworkErrorType } from '../../../shared/types';
+import { DEFAULT_RESPONSE_CONTENT_TYPE } from './rule-match-edit';
 
 /** Selector value of the `错误模板` dropdown when the response is hand-authored. */
 export const CUSTOM_TEMPLATE_ID = 'custom';
@@ -12,8 +12,8 @@ const JSON_CONTENT_TYPE: Record<string, string> = { 'content-type': DEFAULT_RESP
 export interface ErrorTemplateFields {
   status: number;
   body: string;
-  /** The `响应头` textarea text (`name: value` per line). */
-  respHeadersText: string;
+  /** The `响应头` editable-table rows. */
+  respHeadersRows: HeaderRow[];
   neEnabled: boolean;
   neProbability: number | '';
   neType: NetworkErrorType;
@@ -45,7 +45,7 @@ export function applyErrorTemplate(
     ...fields,
     status,
     body,
-    respHeadersText: mergeHeaderText(fields.respHeadersText, headers ?? {}, JSON_CONTENT_TYPE),
+    respHeadersRows: mergeHeaderRows(fields.respHeadersRows, headers ?? {}, JSON_CONTENT_TYPE),
     neEnabled: false,
   };
 }
@@ -74,48 +74,45 @@ export function responseStatusError(status: number, responseDisabled: boolean): 
 }
 
 /**
- * Merges header updates into a `name: value` per line textarea.
+ * Merges header updates into an editable-table row array.
  *
- * A header already in the text is updated in place, keeping its position and name casing; anything
- * else in the text — including lines the `name: value` convention cannot parse — is left untouched,
- * so a template never discards headers the user wrote. Every duplicate line of an overridden header is
- * rewritten, not just the first: the text is later parsed last-wins, so a leftover duplicate would
- * silently override the value the template just wrote. `fallbacks` are appended only when the header
- * is absent, which is how an http template guarantees a JSON content type without overruling a
- * deliberate one.
+ * A row whose name matches an override (case-insensitive) is updated in place, keeping its position
+ * and name casing; anything else is left untouched, so a template never discards user rows.
+ * `fallbacks` are appended only when the header is absent, which is how an http template guarantees
+ * a JSON content type without overruling a deliberate one.
  */
-export function mergeHeaderText(
-  text: string,
+export function mergeHeaderRows(
+  rows: HeaderRow[],
   overrides: Record<string, string>,
   fallbacks: Record<string, string> = {},
-): string {
+): HeaderRow[] {
   const pending = new Map(
     Object.entries(overrides).map(([name, value]) => [name.toLowerCase(), { name, value }]),
   );
   const present = new Set<string>();
-  const rewritten = new Set<string>();
-  const lines = text === '' ? [] : text.split('\n');
-  const merged = lines.map((line) => {
-    const idx = line.indexOf(HEADER_LINE_SEP);
-    if (idx <= 0) return line;
-    const name = line.slice(0, idx).trim();
-    const key = name.toLowerCase();
+
+  const updated = rows.map((row) => {
+    const key = row.name.toLowerCase();
     present.add(key);
     const update = pending.get(key);
-    if (!update) return line;
-    rewritten.add(key);
-    return `${name}${HEADER_LINE_SEP}${update.value}`;
+    if (update) return { ...row, value: update.value };
+    return row;
   });
-  for (const key of rewritten) pending.delete(key);
 
-  const appended = [...pending.values()];
+  for (const key of present) pending.delete(key);
+
+  const appended: HeaderRow[] = [...pending.values()].map(({ name, value }) => ({
+    enabled: true,
+    name,
+    value,
+    description: '',
+  }));
+
   for (const [name, value] of Object.entries(fallbacks)) {
     const key = name.toLowerCase();
     if (present.has(key) || appended.some((h) => h.name.toLowerCase() === key)) continue;
-    appended.push({ name, value });
+    appended.push({ enabled: true, name, value, description: '' });
   }
-  if (appended.length === 0) return rewritten.size > 0 ? merged.join('\n') : text;
 
-  while (merged.length > 0 && merged[merged.length - 1].trim() === '') merged.pop();
-  return [...merged, ...appended.map((h) => `${h.name}${HEADER_LINE_SEP}${h.value}`)].join('\n');
+  return [...updated, ...appended];
 }

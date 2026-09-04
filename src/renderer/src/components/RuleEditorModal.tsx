@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import {
   DELAY_MS_MAX,
   NETWORK_ERROR_TYPES,
+  type HeaderRow,
   type HttpMethod,
   type MockRule,
   type NetworkErrorType,
@@ -22,15 +23,12 @@ import {
   isConnectionTemplateId,
   responseStatusError,
 } from '../lib/error-template-apply';
-import FakerCatalogModal from './FakerCatalogModal';
 import {
-  HEADER_LINE_SEP,
-  buildRequestMatch,
-  buildResponseHeaders,
   formatLines,
-  legacyRequestEditorText,
   parseLines,
 } from '../lib/rule-match-edit';
+import EditableTable from './EditableTable';
+import FakerCatalogModal from './FakerCatalogModal';
 
 const METHODS: HttpMethod[] = ['ANY', 'GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'];
 const URL_TYPES: Array<{ value: UrlPatternType; label: string }> = [
@@ -64,23 +62,38 @@ interface Props {
 }
 
 export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Props) {
-  // initial（编辑现有规则）优先；新建时可由 draft（抓包转规则）预填。两者不会同时出现。
+  // initial（編集现有规则）优先；新建时可由 draft（抓包转规则）预填。两者不会同时出现。
   const seed = initial ?? draft ?? null;
-  // 打开时的请求匹配快照：保存时据此判断「请求头 / 请求体包含」是否真被用户改过，
-  // 未改过的输入框不能把已迁移的 HeaderRow[] / body 规则降级成纯文本形态。
-  const [opened] = useState(() => ({
-    match: seed?.match,
-    ...legacyRequestEditorText(seed?.match),
-  }));
   const [name, setName] = useState(seed?.name ?? '');
   const [urlType, setUrlType] = useState<UrlPatternType>(seed?.match.urlType ?? 'wildcard');
   const [urlPattern, setUrlPattern] = useState(seed?.match.urlPattern ?? '');
   const [method, setMethod] = useState<HttpMethod>(seed?.match.method ?? 'ANY');
   const [queryText, setQueryText] = useState(formatLines(seed?.match.query, '='));
-  const [headersText, setHeadersText] = useState(opened.headersText);
-  const [bodyContains, setBodyContains] = useState(opened.bodyContainsText);
+  const [headersRows, setHeadersRows] = useState<HeaderRow[]>(() => {
+    if (Array.isArray(seed?.match.headers)) return seed.match.headers;
+    if (seed?.match.headers && typeof seed.match.headers === 'object') {
+      return Object.entries(seed.match.headers as Record<string, string>).map(([name, value]) => ({
+        enabled: true,
+        name,
+        value,
+        description: '',
+      }));
+    }
+    return [{ enabled: true, name: '', value: '', description: '' }];
+  });
+  const [bodyContains, setBodyContains] = useState(seed?.match.bodyContains ?? '');
   const [status, setStatus] = useState(seed?.action.status ?? 200);
-  const [respHeadersText, setRespHeadersText] = useState(formatLines(seed?.action.headers, HEADER_LINE_SEP));
+  const [respHeadersRows, setRespHeadersRows] = useState<HeaderRow[]>(() => {
+    if (seed?.action.headers) {
+      return Object.entries(seed.action.headers).map(([name, value]) => ({
+        enabled: true,
+        name,
+        value,
+        description: '',
+      }));
+    }
+    return [{ enabled: true, name: '', value: '', description: '' }];
+  });
   const [body, setBody] = useState(seed?.action.body ?? '');
 
   const [delayMs, setDelayMs] = useState<number | ''>(seed?.action.delayMs ?? '');
@@ -109,12 +122,12 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
     const template = findErrorTemplate(id);
     if (!template) return;
     const next = applyErrorTemplate(
-      { status, body, respHeadersText, neEnabled, neProbability, neType },
+      { status, body, respHeadersRows, neEnabled, neProbability, neType },
       template,
     );
     setStatus(next.status);
     setBody(next.body);
-    setRespHeadersText(next.respHeadersText);
+    setRespHeadersRows(next.respHeadersRows);
     setNeEnabled(next.neEnabled);
     setNeProbability(next.neProbability);
     setNeType(next.neType);
@@ -127,9 +140,17 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
   const clearTemplate = () => setSelectedTemplateId(CUSTOM_TEMPLATE_ID);
 
   const buildAction = (): RuleAction => {
+    const respHeaders: Record<string, string> = {};
+    const hasContentType = respHeadersRows.some(
+      (r) => r.enabled && r.name && r.name.toLowerCase() === 'content-type',
+    );
+    if (!hasContentType) respHeaders['content-type'] = 'application/json';
+    for (const r of respHeadersRows.filter((r) => r.enabled && r.name)) {
+      respHeaders[r.name] = r.value;
+    }
     const action: RuleAction = {
       status,
-      headers: buildResponseHeaders(respHeadersText),
+      headers: respHeaders,
       body,
     };
     if (delayMs !== '') action.delayMs = delayMs;
@@ -157,13 +178,6 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
       return;
     }
     const query = parseLines(queryText, '=');
-    const request = buildRequestMatch({
-      source: opened.match,
-      initialHeadersText: opened.headersText,
-      headersText,
-      initialBodyContainsText: opened.bodyContainsText,
-      bodyContainsText: bodyContains,
-    });
     const action = buildAction();
     try {
       await api.rulesValidate(action);
@@ -179,7 +193,8 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
         urlPattern,
         method,
         query: Object.keys(query).length ? query : undefined,
-        ...request,
+        headers: headersRows.some((r) => r.name || r.value) ? headersRows : undefined,
+        bodyContains: bodyContains || undefined,
       },
       action,
     };
@@ -246,8 +261,8 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
           </select>
           <label>Query（每行 k=v）</label>
           <textarea rows={2} value={queryText} onChange={(e) => setQueryText(e.target.value)} />
-          <label>请求头（每行 k: v）</label>
-          <textarea rows={2} value={headersText} onChange={(e) => setHeadersText(e.target.value)} />
+          <label>请求头</label>
+          <EditableTable rows={headersRows} onChange={setHeadersRows} ariaLabel="请求头" />
           <label>请求体包含</label>
           <input value={bodyContains} onChange={(e) => setBodyContains(e.target.value)} />
           <label>响应状态码</label>
@@ -261,14 +276,14 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
               clearTemplate();
             }}
           />
-          <label>响应头（每行 k: v）</label>
-          <textarea
-            rows={2}
-            value={respHeadersText}
-            onChange={(e) => {
-              setRespHeadersText(e.target.value);
+          <label>响应头</label>
+          <EditableTable
+            rows={respHeadersRows}
+            onChange={(rows) => {
+              setRespHeadersRows(rows);
               clearTemplate();
             }}
+            ariaLabel="响应头"
           />
           <label>响应体</label>
           <textarea
