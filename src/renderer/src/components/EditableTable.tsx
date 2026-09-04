@@ -49,9 +49,9 @@ export default function EditableTable({ rows, onChange, columns = {}, ariaLabel 
       <thead>
         <tr>
           {showEnabled && <th className="col-enabled"></th>}
-          <th>名称</th>
-          <th>值</th>
-          {showDescription && <th>描述</th>}
+          <th className="col-name">名称</th>
+          <th className="col-value">值</th>
+          {showDescription && <th className="col-desc">描述</th>}
           <th className="col-action"></th>
         </tr>
       </thead>
