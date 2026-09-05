@@ -15,6 +15,7 @@ export interface MockComputation {
 export interface MockComputationOptions {
   signal?: AbortSignal;
   rng?: () => number;
+  sequenceIndex?: number;
 }
 
 /**
@@ -27,22 +28,36 @@ export async function computeMockResult(
   ctx: RenderContext,
   options: MockComputationOptions = {},
 ): Promise<MockComputation> {
-  const ne = matched.action.networkError;
+  if (matched.action.kind === 'sequential') {
+    const responses = matched.action.responses;
+    const idx = Math.max(0, Math.min(options.sequenceIndex ?? 0, responses.length - 1));
+    const step = responses[idx]!;
+    const warnings: string[] = [];
+    const body = renderTemplate(step.body, ctx, matched.action.fakerLocale, warnings);
+    const headers: Record<string, string> = {};
+    for (const [k, v] of Object.entries(step.headers)) {
+      headers[k] = renderTemplate(v, ctx, matched.action.fakerLocale, warnings);
+    }
+    return { status: step.status, headers, body, warnings, networkError: null };
+  }
+
+  const action = matched.action;
+  const ne = action.networkError;
   const rng = options.rng ?? Math.random;
   if (ne && rng() * 100 < ne.probability) {
     return { status: 0, headers: {}, body: '', warnings: [], networkError: resolveNetworkError(ne) };
   }
 
-  const delayMs = matched.action.delayMs ?? 0;
+  const delayMs = action.delayMs ?? 0;
   if (delayMs > 0) {
     await sleep(delayMs, options.signal);
   }
 
   const warnings: string[] = [];
-  const body = renderTemplate(matched.action.body, ctx, matched.action.fakerLocale, warnings);
+  const body = renderTemplate(action.body, ctx, action.fakerLocale, warnings);
   const headers: Record<string, string> = {};
-  for (const [k, v] of Object.entries(matched.action.headers)) {
-    headers[k] = renderTemplate(v, ctx, matched.action.fakerLocale, warnings);
+  for (const [k, v] of Object.entries(action.headers)) {
+    headers[k] = renderTemplate(v, ctx, action.fakerLocale, warnings);
   }
-  return { status: matched.action.status, headers, body, warnings, networkError: null };
+  return { status: action.status, headers, body, warnings, networkError: null };
 }

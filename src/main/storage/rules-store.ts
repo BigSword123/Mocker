@@ -19,7 +19,7 @@ function cloneRows(rows: HeaderRow[]): HeaderRow[] {
  */
 function cloneRule(rule: MockRule): MockRule {
   const { query, headers, body } = rule.match;
-  return {
+  const base = {
     ...rule,
     match: {
       ...rule.match,
@@ -34,12 +34,21 @@ function cloneRule(rule: MockRule): MockRule {
           }
         : {}),
     },
-    action: {
+  } as MockRule;
+  if (rule.action.kind === 'sequential') {
+    base.action = {
+      kind: 'sequential',
+      responses: rule.action.responses.map((r) => ({ ...r, headers: { ...r.headers } })),
+      ...(rule.action.fakerLocale !== undefined ? { fakerLocale: rule.action.fakerLocale } : {}),
+    };
+  } else {
+    base.action = {
       ...rule.action,
       headers: { ...rule.action.headers },
       ...(rule.action.networkError ? { networkError: { ...rule.action.networkError } } : {}),
-    },
-  };
+    };
+  }
+  return base;
 }
 
 export class RulesStore {

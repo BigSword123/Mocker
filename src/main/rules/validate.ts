@@ -6,6 +6,17 @@ import {
 } from '../../shared/types';
 
 export function validateAction(action: RuleAction): void {
+  if (action.kind === 'sequential') {
+    if (!Array.isArray(action.responses) || action.responses.length === 0) {
+      throw new Error('序列响应至少需要 1 个响应');
+    }
+    action.responses.forEach((r, i) => {
+      if (r.status < 100 || r.status > 999) {
+        throw new Error(`第 ${i + 1} 个响应的状态码无效: ${r.status}`);
+      }
+    });
+    return;
+  }
   if (action.delayMs !== undefined) {
     if (!Number.isInteger(action.delayMs)) {
       throw new Error('delayMs 必须是整数');
