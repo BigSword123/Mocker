@@ -59,22 +59,22 @@ export default function RulesPanel() {
       </div>
       <table className="rules-table">
         <thead>
-          <tr><th>启用</th><th>名称</th><th>匹配</th><th>响应</th><th>操作</th></tr>
+          <tr><th className="col-enabled">启用</th><th className="col-name">名称</th><th className="col-match">匹配</th><th className="col-response">响应</th><th className="col-ops">操作</th></tr>
         </thead>
         <tbody>
           {rules.map((r) => (
             <tr key={r.id}>
-              <td>
+              <td className="col-enabled">
                 <input
                   type="checkbox"
                   checked={r.enabled}
                   onChange={(e) => toggleEnabled(r, e.target.checked)}
                 />
               </td>
-              <td>{r.name}</td>
-              <td className="muted">{r.match.method} {r.match.urlPattern}</td>
-              <td className="muted">{r.action.status}</td>
-              <td>
+              <td className="col-name" title={r.name}>{r.name}</td>
+              <td className="col-match muted" title={`${r.match.method} ${r.match.urlPattern}`}>{r.match.method} {r.match.urlPattern}</td>
+              <td className="col-response muted">{r.action.status}</td>
+              <td className="col-ops">
                 <div className="ops">
                   <button onClick={() => move(r, -1)}>↑</button>
                   <button onClick={() => move(r, 1)}>↓</button>
