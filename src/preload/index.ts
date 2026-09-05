@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { Api } from '../shared/api';
-import type { RenderContext, ReplayRequest, RuleAction, RuleInput, RulePatch, Settings, TrafficEvent } from '../shared/types';
+import type { RedirectRule, RenderContext, ReplayRequest, RuleAction, RuleInput, RulePatch, Settings, TrafficEvent } from '../shared/types';
 
 const api: Api = {
   proxyStart: () => ipcRenderer.invoke('proxy:start'),
@@ -25,6 +25,17 @@ const api: Api = {
   harExport: (payload: { events: TrafficEvent[]; defaultName: string }) =>
     ipcRenderer.invoke('har:export', payload),
   harImport: () => ipcRenderer.invoke('har:import'),
+  redirectsList: () => ipcRenderer.invoke('redirects:list'),
+  redirectsAdd: (input) => ipcRenderer.invoke('redirects:add', input),
+  redirectsUpdate: (id: string, patch) => ipcRenderer.invoke('redirects:update', id, patch),
+  redirectsRemove: (id: string) => ipcRenderer.invoke('redirects:remove', id),
+  scenariosList: () => ipcRenderer.invoke('scenarios:list'),
+  scenariosAdd: (name) => ipcRenderer.invoke('scenarios:add', name),
+  scenariosRename: (oldName, newName) => ipcRenderer.invoke('scenarios:rename', oldName, newName),
+  scenariosSetEnabled: (name, enabled) => ipcRenderer.invoke('scenarios:set-enabled', name, enabled),
+  scenariosRemove: (name) => ipcRenderer.invoke('scenarios:remove', name),
+  rulesResetSequence: (ruleId) => ipcRenderer.invoke('rules:reset-sequence', ruleId),
+  openFileDialog: () => ipcRenderer.invoke('dialog:open-file'),
 };
 
 contextBridge.exposeInMainWorld('api', api);

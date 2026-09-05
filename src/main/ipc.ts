@@ -3,7 +3,9 @@ import * as fs from 'node:fs';
 import { networkInterfaces } from 'node:os';
 import type { ProxyServer } from './proxy/proxy-server';
 import type { HistoryWriter } from './storage/history';
+import type { RedirectsStore } from './storage/redirects-store';
 import type { RulesStore } from './storage/rules-store';
+import type { ScenariosStore } from './storage/scenarios-store';
 import type { SettingsStore } from './storage/settings-store';
 import { disableSystemProxy, enableSystemProxy, systemProxyEnabled } from './system-proxy';
 import type { CaMaterial } from './certs/ca';
@@ -18,6 +20,8 @@ import type { ReplayService } from './replay/replay';
 export interface IpcContext {
   proxy: ProxyServer;
   rules: RulesStore;
+  redirects: RedirectsStore;
+  scenarios: ScenariosStore;
   settings: SettingsStore;
   ca: CaMaterial;
   history: HistoryWriter;
@@ -135,6 +139,45 @@ export function registerIpc(ctx: IpcContext): void {
     if (canceled || filePaths.length === 0) return { events: null };
     const text = await fs.promises.readFile(filePaths[0]!, 'utf8');
     return { events: fromHar(text) };
+  });
+
+  ipcMain.handle('dialog:open-file', async () => {
+    const { canceled, filePaths } = await showOpenDialog({
+      properties: ['openFile'],
+    });
+    if (canceled || filePaths.length === 0) return null;
+    return filePaths[0]!;
+  });
+
+  ipcMain.handle('redirects:list', () => ctx.redirects.list());
+  ipcMain.handle('redirects:add', (_e, input) => ctx.redirects.add(input));
+  ipcMain.handle('redirects:update', (_e, id: string, patch) => ctx.redirects.update(id, patch));
+  ipcMain.handle('redirects:remove', (_e, id: string) => ctx.redirects.remove(id));
+
+  ipcMain.handle('scenarios:list', () => ctx.scenarios.list());
+  ipcMain.handle('scenarios:add', (_e, name: string) => ctx.scenarios.add(name));
+  ipcMain.handle('scenarios:rename', async (_e, oldName: string, newName: string) => {
+    await ctx.scenarios.rename(oldName, newName);
+    for (const r of ctx.rules.list()) {
+      if (r.scenario === oldName) await ctx.rules.update(r.id, { scenario: newName });
+    }
+    for (const r of ctx.redirects.list()) {
+      if (r.scenario === oldName) await ctx.redirects.update(r.id, { scenario: newName });
+    }
+  });
+  ipcMain.handle('scenarios:set-enabled', (_e, name: string, enabled: boolean) => ctx.scenarios.setEnabled(name, enabled));
+  ipcMain.handle('scenarios:remove', async (_e, name: string) => {
+    await ctx.scenarios.remove(name);
+    for (const r of ctx.rules.list()) {
+      if (r.scenario === name) await ctx.rules.update(r.id, { scenario: undefined });
+    }
+    for (const r of ctx.redirects.list()) {
+      if (r.scenario === name) await ctx.redirects.update(r.id, { scenario: undefined });
+    }
+  });
+
+  ipcMain.handle('rules:reset-sequence', (_e, ruleId: string) => {
+    ctx.proxy.resetSequenceCounter(ruleId);
   });
 }
 

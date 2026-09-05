@@ -1,4 +1,4 @@
-import type { CertInfo, CertInstallCommands, MockRule, ProxyStatus, RenderContext, ReplayRequest, RuleAction, RuleInput, RulePatch, Settings, TrafficEvent } from './types';
+import type { CertInfo, CertInstallCommands, MockRule, ProxyStatus, RedirectRule, RenderContext, ReplayRequest, RuleAction, RuleInput, RulePatch, Scenario, Settings, TrafficEvent } from './types';
 
 export interface Api {
   proxyStart(): Promise<void>;
@@ -24,6 +24,17 @@ export interface Api {
   replaySend(input: ReplayRequest, replayedFromId?: string): Promise<string>;
   harExport(payload: { events: TrafficEvent[]; defaultName: string }): Promise<{ saved: boolean; filePath?: string }>;
   harImport(): Promise<{ events: TrafficEvent[] | null }>;
+  redirectsList(): Promise<RedirectRule[]>;
+  redirectsAdd(input: Omit<RedirectRule, 'id' | 'priority'>): Promise<RedirectRule>;
+  redirectsUpdate(id: string, patch: Partial<Omit<RedirectRule, 'id'>>): Promise<RedirectRule>;
+  redirectsRemove(id: string): Promise<void>;
+  scenariosList(): Promise<Scenario[]>;
+  scenariosAdd(name: string): Promise<Scenario>;
+  scenariosRename(oldName: string, newName: string): Promise<void>;
+  scenariosSetEnabled(name: string, enabled: boolean): Promise<void>;
+  scenariosRemove(name: string): Promise<void>;
+  rulesResetSequence(ruleId: string): Promise<void>;
+  openFileDialog(): Promise<string | null>;
 }
 
 declare global {
