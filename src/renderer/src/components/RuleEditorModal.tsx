@@ -12,6 +12,7 @@ import {
   type RuleAction,
   type RuleBody,
   type RuleInput,
+  type SequentialResponse,
   type UrlPatternType,
 } from '../../../shared/types';
 import {
@@ -29,6 +30,7 @@ import {
 import EditableTable from './EditableTable';
 import FakerCatalogModal from './FakerCatalogModal';
 import JsonBodyEditor, { JsonSpans } from './JsonBodyEditor';
+import ScenarioField from './ScenarioField';
 import { parseJsonBody, tokenizeJson } from '../lib/json-format';
 
 const METHODS: HttpMethod[] = ['ANY', 'GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'];
@@ -129,6 +131,24 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
   const [neStatusCode, setNeStatusCode] = useState<number | ''>(
     seedAction?.networkError?.errorStatusCode ?? '',
   );
+
+  const [mode, setMode] = useState<'static' | 'sequential'>(
+    seed && 'responses' in seed.action ? 'sequential' : 'static',
+  );
+  const [seqResponses, setSeqResponses] = useState<SequentialResponse[]>(
+    seed && 'responses' in seed.action ? seed.action.responses : [{ status: 200, headers: {}, body: '' }],
+  );
+  const [scenario, setScenario] = useState<string | undefined>(seed?.scenario);
+
+  const updateSeq = (idx: number, patch: Partial<SequentialResponse>) => {
+    setSeqResponses((prev) => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
+  };
+  const removeSeq = (idx: number) => {
+    setSeqResponses((prev) => prev.filter((_, i) => i !== idx));
+  };
+  const addSeq = () => {
+    setSeqResponses((prev) => [...prev, { status: 200, headers: {}, body: '' }]);
+  };
   const [preview, setPreview] = useState('');
   const previewTokens = useMemo(() => tokenizeJson(preview), [preview]);
   const [previewWarnings, setPreviewWarnings] = useState<string[]>([]);
@@ -164,6 +184,12 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
   const clearTemplate = () => setSelectedTemplateId(CUSTOM_TEMPLATE_ID);
 
   const buildAction = (): RuleAction => {
+    if (mode === 'sequential') {
+      const responses = seqResponses.length > 0 ? seqResponses : [{ status: 200, headers: {}, body: '' }];
+      const action: RuleAction = { responses };
+      if (fakerLocale) action.fakerLocale = fakerLocale;
+      return action;
+    }
     const respHeaders: Record<string, string> = {};
     const hasContentType = respHeadersRows.some(
       (r) => r.enabled && r.name && r.name.toLowerCase() === 'content-type',
@@ -439,6 +465,61 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
         <details className="form-section" open>
           <summary>行为模拟</summary>
           <div className="form-grid">
+            <label>响应模式</label>
+            <div>
+              <label>
+                <input
+                  type="radio"
+                  name="response-mode"
+                  data-testid="mode-static"
+                  checked={mode === 'static'}
+                  onChange={() => setMode('static')}
+                />
+                静态响应
+              </label>{' '}
+              <label>
+                <input
+                  type="radio"
+                  name="response-mode"
+                  data-testid="mode-sequential"
+                  checked={mode === 'sequential'}
+                  onChange={() => setMode('sequential')}
+                />
+                序列响应
+              </label>
+            </div>
+            <label>场景</label>
+            <ScenarioField value={scenario} onChange={setScenario} />
+            <label>本地化</label>
+            <select value={fakerLocale} onChange={(e) => setFakerLocale(e.target.value)}>
+              {LOCALES.map((l) => <option key={l} value={l}>{l}</option>)}
+            </select>
+            {mode === 'sequential' && (
+              <>
+                <label>序列响应</label>
+                <div data-testid="sequential-editor">
+                  {seqResponses.map((r, i) => (
+                    <div key={i} className="seq-row" data-testid={`seq-row-${i}`}>
+                      <input
+                        type="number"
+                        data-testid={`seq-status-${i}`}
+                        value={r.status}
+                        onChange={(e) => updateSeq(i, { status: Number(e.target.value) })}
+                        placeholder="状态码"
+                      />
+                      <input
+                        data-testid={`seq-body-${i}`}
+                        value={r.body}
+                        onChange={(e) => updateSeq(i, { body: e.target.value })}
+                        placeholder="响应体"
+                      />
+                      <button type="button" data-testid={`seq-remove-${i}`} onClick={() => removeSeq(i)}>×</button>
+                    </div>
+                  ))}
+                  <button type="button" data-testid="seq-add" onClick={addSeq}>+ 添加响应</button>
+                </div>
+              </>
+            )}
             <label htmlFor={TEMPLATE_SELECT_ID}>错误模板</label>
             <select
               id={TEMPLATE_SELECT_ID}
@@ -454,15 +535,17 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
                 </optgroup>
               ))}
             </select>
-            <label>延迟（ms）</label>
-            <input
-              type="number"
-              value={delayMs}
-              min={0}
-              max={DELAY_MS_MAX}
-              onChange={(e) => setDelayMs(e.target.value === '' ? '' : Number(e.target.value))}
-            />
-            <label>网络异常</label>
+            {mode === 'static' && (
+              <>
+                <label>延迟（ms）</label>
+                <input
+                  type="number"
+                  value={delayMs}
+                  min={0}
+                  max={DELAY_MS_MAX}
+                  onChange={(e) => setDelayMs(e.target.value === '' ? '' : Number(e.target.value))}
+                />
+                <label>网络异常</label>
             <label className="checkbox">
               <input
                 type="checkbox"
@@ -508,6 +591,8 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
                     />
                   </>
                 )}
+              </>
+            )}
               </>
             )}
           </div>
