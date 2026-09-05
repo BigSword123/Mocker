@@ -1,10 +1,12 @@
 import * as os from 'node:os';
 import * as mockttp from 'mockttp';
-import type { MockRule, Settings, TrafficEvent } from '../../shared/types';
+import type { MockRule, RedirectRule, Scenario, Settings, TrafficEvent } from '../../shared/types';
 import { findMatchingRule } from '../rules/engine';
 import type { RequestDescription } from '../rules/matcher';
 import { computeMockResult, type MockComputation } from '../rules/apply-rule';
 import type { RenderContext } from '../rules/template';
+import { resolveMapLocal, sendMapRemote } from '../rules/redirect';
+import { ruleEffective } from '../rules/rule-effective';
 import { certDownloadResponse, guidePageResponse, type OnboardingResponse } from './onboarding';
 
 export interface ProxyServerOptions {
@@ -12,6 +14,8 @@ export interface ProxyServerOptions {
   caCert: string;
   getSettings: () => Settings;
   getRules: () => MockRule[];
+  getRedirects?: () => RedirectRule[];
+  getScenarios?: () => ReadonlyMap<string, Scenario>;
   onEvent: (event: TrafficEvent) => void;
 }
 
@@ -34,8 +38,13 @@ export class ProxyServer {
   private events = new Map<string, TrafficEvent>();
   private startPromise?: Promise<void>;
   private proxyHosts: Set<string> = new Set(['localhost', '127.0.0.1']);
+  private seqCounters = new Map<string, number>();
 
   constructor(private readonly opts: ProxyServerOptions) {}
+
+  resetSequenceCounter(ruleId: string): void {
+    this.seqCounters.delete(ruleId);
+  }
 
   get running(): boolean {
     return this.server !== undefined;
@@ -170,12 +179,95 @@ export class ProxyServer {
       }
     }
 
-    const matched = findMatchingRule(this.opts.getRules(), describeRequest(req, bodyText));
+    const scenarios = this.opts.getScenarios?.() ?? new Map<string, Scenario>();
+    const description = describeRequest(req, bodyText);
+
+    const redirectMatched = this.findRedirect(redirects(), scenarios, description);
+    if (redirectMatched) {
+      return await this.handleRedirect(redirectMatched, description, event, bodyText);
+    }
+
+    const matched = findMatchingRule(
+      this.opts.getRules().filter((r) => ruleEffective(r, scenarios)),
+      description,
+    );
     if (matched) {
       return await this.handleMatched(matched, req, event, bodyText);
     }
 
     return undefined;
+  }
+
+  private findRedirect(
+    redirects: RedirectRule[],
+    scenarios: ReadonlyMap<string, Scenario>,
+    description: RequestDescription,
+  ): RedirectRule | undefined {
+    if (redirects.length === 0) return undefined;
+    const sorted = [...redirects]
+      .filter((r) => ruleEffective(r, scenarios))
+      .sort((a, b) => a.priority - b.priority);
+    for (const r of sorted) {
+      if (matchRule(r.match, description)) return r;
+    }
+    return undefined;
+  }
+
+  private redirects(): RedirectRule[] {
+    return this.opts.getRedirects?.() ?? [];
+  }
+
+  private async handleRedirect(
+    rule: RedirectRule,
+    req: RequestDescription,
+    event: TrafficEvent,
+    bodyText: string,
+  ): Promise<mockttp.requestSteps.CallbackRequestResult | void> {
+    event.mocked = true;
+    event.matchedRuleId = rule.id;
+
+    if (rule.action === 'mapLocal') {
+      const res = await resolveMapLocal(rule.target);
+      if (res.ok) {
+        event.status = 200;
+        event.responseHeaders = { 'content-type': res.mime };
+        event.responseBody = res.content.toString('utf8');
+      } else {
+        event.status = 404;
+        event.responseHeaders = { 'content-type': 'text/plain; charset=utf-8' };
+        event.responseBody = `File not found: ${rule.target}`;
+        event.error = `map-local: ${res.reason}`;
+      }
+      event.completedAt = Date.now();
+      this.emit(event);
+      return {
+        response: toCallbackResponse({
+          statusCode: event.status ?? 404,
+          headers: event.responseHeaders ?? {},
+          body: event.responseBody ?? '',
+        }),
+      };
+    }
+
+    const remote = await sendMapRemote(rule.target, req);
+    if (remote.error !== undefined) {
+      event.error = remote.error;
+      event.completedAt = Date.now();
+      this.emit(event);
+      return { response: 'close' as const };
+    }
+    event.status = remote.status;
+    event.responseHeaders = remote.headers;
+    event.responseBody = remote.body;
+    event.completedAt = Date.now();
+    this.emit(event);
+    return {
+      response: toCallbackResponse({
+        statusCode: remote.status ?? 502,
+        headers: remote.headers ?? {},
+        body: remote.body ?? '',
+      }),
+    };
   }
 
   /**
@@ -192,13 +284,25 @@ export class ProxyServer {
     event.mocked = true;
     event.matchedRuleId = matched.id;
 
+    const isSequential = 'responses' in matched.action;
+    const sequenceIndex = isSequential
+      ? Math.min(this.seqCounters.get(matched.id) ?? 0, matched.action.responses.length - 1)
+      : undefined;
+    if (isSequential) {
+      event.sequenceIndex = sequenceIndex;
+      this.seqCounters.set(matched.id, (this.seqCounters.get(matched.id) ?? 0) + 1);
+    }
+
     let result: MockComputation;
     try {
       result = await computeMockResult(matched, buildRenderContext(req, bodyText), {
         signal: this.abort?.signal,
+        ...(sequenceIndex !== undefined ? { sequenceIndex } : {}),
       });
     } catch {
-      // Proxy is stopping; drop the request rather than forward it.
+      if (isSequential) {
+        this.seqCounters.set(matched.id, sequenceIndex!);
+      }
       return { response: 'close' };
     }
 
