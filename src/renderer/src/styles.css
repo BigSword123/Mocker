@@ -41,6 +41,7 @@ input:disabled, select:disabled, textarea:disabled { color: #9b9ca6; background:
 .detail h3 { font-size: 13px; margin-bottom: 8px; word-break: break-all; }
 .detail-head { display: flex; align-items: center; gap: 8px; }
 .detail-head h3 { flex: 1; min-width: 0; }
+.detail-head select { max-width: 110px; }
 .detail h4 { margin: 12px 0 4px; color: #8a8b96; font-size: 12px; }
 .detail pre { background: #26272e; border-radius: 6px; padding: 8px; white-space: pre-wrap; word-break: break-all; max-height: 240px; overflow-y: auto; }
 table.kv { border-collapse: collapse; width: 100%; }
