@@ -33,6 +33,7 @@ export interface MockRule {
   id: string;
   name: string;
   enabled: boolean;
+  scenario?: string;
   priority: number;
   match: RuleMatch;
   action: RuleAction;

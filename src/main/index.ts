@@ -6,10 +6,12 @@ import { registerIpc } from './ipc';
 import { ProxyServer } from './proxy/proxy-server';
 import { ReplayService } from './replay/replay';
 import { HistoryWriter } from './storage/history';
+import { RedirectsStore } from './storage/redirects-store';
 import { RulesStore } from './storage/rules-store';
+import { ScenariosStore } from './storage/scenarios-store';
 import { SettingsStore } from './storage/settings-store';
 import { disableSystemProxy } from './system-proxy';
-import type { TrafficEvent } from '../shared/types';
+import type { Scenario, TrafficEvent } from '../shared/types';
 
 // Held as a module-level reference so the window is not garbage-collected.
 let mainWindow: BrowserWindow | null = null;
@@ -58,11 +60,21 @@ async function bootstrap(): Promise<void> {
     history.write(event);
   };
 
+  const redirects = new RedirectsStore(dataDir);
+  const scenarios = new ScenariosStore(dataDir);
+  await redirects.load();
+  await scenarios.load();
+
+  const scenariosMap = (): Map<string, Scenario> =>
+    new Map(scenarios.list().map((s) => [s.name, s]));
+
   const proxy = new ProxyServer({
     caKey: ca.keyPem,
     caCert: ca.certPem,
     getSettings: () => settings.get(),
     getRules: () => rules.list(),
+    getRedirects: () => redirects.list(),
+    getScenarios: scenariosMap,
     onEvent,
   });
 
@@ -71,6 +83,8 @@ async function bootstrap(): Promise<void> {
   registerIpc({
     proxy,
     rules,
+    redirects,
+    scenarios,
     settings,
     ca,
     history,
