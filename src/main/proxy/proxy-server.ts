@@ -204,7 +204,8 @@ export class ProxyServer {
 
     if (result.networkError) {
       event.errorTriggered = true;
-      event.error = `network-error:${matched.action.networkError?.type ?? ''}`;
+      const neType = 'responses' in matched.action ? matched.action.networkError?.type : undefined;
+      event.error = `network-error:${neType ?? ''}`;
       event.completedAt = Date.now();
       this.emit(event);
       const resolution = result.networkError;
