@@ -4,6 +4,7 @@ import type { MockRule, Settings, TrafficEvent } from '../../shared/types';
 import { findMatchingRule } from '../rules/engine';
 import type { RequestDescription } from '../rules/matcher';
 import { computeMockResult, type MockComputation } from '../rules/apply-rule';
+import type { RenderContext } from '../rules/template';
 import { certDownloadResponse, guidePageResponse, type OnboardingResponse } from './onboarding';
 
 export interface ProxyServerOptions {
