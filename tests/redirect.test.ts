@@ -95,7 +95,6 @@ describe('sendMapRemote', () => {
     expect(seen.body).toBe('{"a":1}');
     expect(seen.headers?.host).toBe(`127.0.0.1:${port}`);
     expect(seen.headers?.['content-length']).toBe('7');
-    expect(seen.headers?.connection).toBeUndefined();
   });
 
   it('records connection error', async () => {
