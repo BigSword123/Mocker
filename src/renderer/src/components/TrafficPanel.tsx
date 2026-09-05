@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { RuleInput, TrafficEvent } from '../../../shared/types';
+import { api } from '../lib/api';
 import { captureToRuleInput } from '../lib/capture-to-rule';
 import { EMPTY_FILTER, matchesFilter } from '../lib/traffic-filter';
 import { useTrafficStore } from '../stores/traffic';
+import ComposeModal from './ComposeModal';
 import RuleEditorModal from './RuleEditorModal';
 import TrafficDetail from './TrafficDetail';
 import TrafficTable from './TrafficTable';
@@ -10,10 +12,12 @@ import TrafficTable from './TrafficTable';
 const FILTER_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'];
 
 export default function TrafficPanel() {
-  const { list, filter, paused, setFilter, togglePause, clear } = useTrafficStore();
+  const { list, filter, paused, setFilter, togglePause, clear, setEvents } = useTrafficStore();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draft, setDraft] = useState<RuleInput | null>(null);
+  const [composeSeed, setComposeSeed] = useState<TrafficEvent | null>(null);
   const [textDraft, setTextDraft] = useState('');
+  const [actionError, setActionError] = useState('');
 
   useEffect(() => {
     const t = setTimeout(() => setFilter({ text: textDraft }), 200);
@@ -26,6 +30,44 @@ export default function TrafficPanel() {
     () => list.find((e) => e.id === selectedId) ?? null,
     [list, selectedId],
   );
+
+  const replay = async (event: TrafficEvent) => {
+    setActionError('');
+    try {
+      const id = await api.replaySend(
+        { method: event.method, url: event.url, headers: event.requestHeaders, body: event.requestBody ?? '' },
+        event.id,
+      );
+      setSelectedId(id);
+    } catch (err) {
+      setActionError(String(err));
+    }
+  };
+
+  const exportHar = async () => {
+    setActionError('');
+    try {
+      await api.harExport({
+        events: filtered.filter((e) => e.completedAt !== undefined),
+        defaultName: `mocker-${new Date().toISOString().replace(/[:.]/g, '-')}.har`,
+      });
+    } catch (err) {
+      setActionError(String(err));
+    }
+  };
+
+  const importHar = async () => {
+    setActionError('');
+    try {
+      const res = await api.harImport();
+      if (!res.events) return;
+      if (list.length > 0 && !window.confirm(`导入 ${res.events.length} 条将替换当前流量列表，继续？`)) return;
+      setEvents(res.events);
+      setSelectedId(null);
+    } catch (err) {
+      setActionError(String(err));
+    }
+  };
 
   return (
     <div className="traffic-panel">
@@ -68,13 +110,25 @@ export default function TrafficPanel() {
         <button data-testid="filter-clear" onClick={() => { setTextDraft(''); setFilter(EMPTY_FILTER); }}>
           清除
         </button>
+        <button data-testid="har-export" disabled={!filtered.some((e) => e.completedAt !== undefined)} onClick={exportHar}>
+          导出 HAR
+        </button>
+        <button data-testid="har-import" onClick={importHar}>
+          导入 HAR
+        </button>
         <button onClick={togglePause}>{paused ? '继续' : '暂停'}</button>
         <button onClick={() => { clear(); setSelectedId(null); }}>清空</button>
         <span className="muted">{filtered.length} 条</span>
+        {actionError && <span className="text-err">{actionError}</span>}
       </div>
       <div className="split">
         <TrafficTable events={filtered} selectedId={selectedId} onSelect={(e) => setSelectedId(e.id)} />
-        <TrafficDetail event={selected} onCaptureToRule={(e) => setDraft(captureToRuleInput(e))} />
+        <TrafficDetail
+          event={selected}
+          onCaptureToRule={(e) => setDraft(captureToRuleInput(e))}
+          onReplay={replay}
+          onCompose={(e) => setComposeSeed(e)}
+        />
       </div>
       {draft && (
         <RuleEditorModal
@@ -82,6 +136,16 @@ export default function TrafficPanel() {
           draft={draft}
           onClose={() => setDraft(null)}
           onSaved={() => setDraft(null)}
+        />
+      )}
+      {composeSeed && (
+        <ComposeModal
+          seed={composeSeed}
+          onClose={() => setComposeSeed(null)}
+          onSent={(id) => {
+            setComposeSeed(null);
+            setSelectedId(id);
+          }}
         />
       )}
     </div>

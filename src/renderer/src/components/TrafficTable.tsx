@@ -33,6 +33,8 @@ export default function TrafficTable({ events, selectedId, onSelect }: Props) {
               <span className="cell method">{e.method}</span>
               <span className="cell url" title={e.url}>{e.url}</span>
               {e.mocked && <span className="badge">MOCK</span>}
+              {e.origin === 'replay' && <span className="badge badge-replay">重放</span>}
+              {e.origin === 'imported' && <span className="badge badge-import">导入</span>}
             </div>
           );
         })}

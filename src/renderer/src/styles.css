@@ -36,6 +36,8 @@ input:disabled, select:disabled, textarea:disabled { color: #9b9ca6; background:
 .cell.method { width: 60px; color: #8a8b96; }
 .cell.url { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .badge { font-size: 10px; background: #3b6ef6; color: #fff; border-radius: 4px; padding: 1px 5px; }
+.badge-replay { background: #7a3bf6; }
+.badge-import { background: #0f9d58; }
 .detail { flex: 2; overflow-y: auto; padding: 12px 16px; }
 .detail.empty { display: flex; align-items: center; justify-content: center; color: #8a8b96; }
 .detail h3 { font-size: 13px; margin-bottom: 8px; word-break: break-all; }
