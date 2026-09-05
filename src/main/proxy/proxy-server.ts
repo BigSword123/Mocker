@@ -2,7 +2,7 @@ import * as os from 'node:os';
 import * as mockttp from 'mockttp';
 import type { MockRule, RedirectRule, Scenario, Settings, TrafficEvent } from '../../shared/types';
 import { findMatchingRule } from '../rules/engine';
-import type { RequestDescription } from '../rules/matcher';
+import { matchRule, type RequestDescription } from '../rules/matcher';
 import { computeMockResult, type MockComputation } from '../rules/apply-rule';
 import type { RenderContext } from '../rules/template';
 import { resolveMapLocal, sendMapRemote } from '../rules/redirect';
@@ -182,7 +182,7 @@ export class ProxyServer {
     const scenarios = this.opts.getScenarios?.() ?? new Map<string, Scenario>();
     const description = describeRequest(req, bodyText);
 
-    const redirectMatched = this.findRedirect(redirects(), scenarios, description);
+    const redirectMatched = this.findRedirect(this.redirects(), scenarios, description);
     if (redirectMatched) {
       return await this.handleRedirect(redirectMatched, description, event, bodyText);
     }
@@ -284,13 +284,12 @@ export class ProxyServer {
     event.mocked = true;
     event.matchedRuleId = matched.id;
 
-    const isSequential = 'responses' in matched.action;
-    const sequenceIndex = isSequential
-      ? Math.min(this.seqCounters.get(matched.id) ?? 0, matched.action.responses.length - 1)
-      : undefined;
-    if (isSequential) {
+    let sequenceIndex: number | undefined;
+    if ('responses' in matched.action) {
+      const responses = matched.action.responses;
+      sequenceIndex = Math.min(this.seqCounters.get(matched.id) ?? 0, responses.length - 1);
       event.sequenceIndex = sequenceIndex;
-      this.seqCounters.set(matched.id, (this.seqCounters.get(matched.id) ?? 0) + 1);
+      this.seqCounters.set(matched.id, sequenceIndex + 1);
     }
 
     let result: MockComputation;
@@ -300,8 +299,8 @@ export class ProxyServer {
         ...(sequenceIndex !== undefined ? { sequenceIndex } : {}),
       });
     } catch {
-      if (isSequential) {
-        this.seqCounters.set(matched.id, sequenceIndex!);
+      if (sequenceIndex !== undefined) {
+        this.seqCounters.set(matched.id, sequenceIndex);
       }
       return { response: 'close' };
     }
