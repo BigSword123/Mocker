@@ -1,8 +1,11 @@
-import type { HttpMethod, HeaderRow, RuleInput, TrafficEvent } from '../../../shared/types';
+import type { HttpMethod, HeaderRow, MockRule, RuleInput, TrafficEvent } from '../../../shared/types';
+
+type StaticAction = Extract<MockRule['action'], { status: number }>;
+export type CaptureToRuleResult = Omit<RuleInput, 'action'> & { action: StaticAction };
 
 const KNOWN_METHODS: HttpMethod[] = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'];
 
-export function captureToRuleInput(event: TrafficEvent): RuleInput {
+export function captureToRuleInput(event: TrafficEvent): CaptureToRuleResult {
   const upper = event.method.toUpperCase();
   const method: HttpMethod = KNOWN_METHODS.includes(upper as HttpMethod) ? (upper as HttpMethod) : 'ANY';
 

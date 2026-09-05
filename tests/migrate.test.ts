@@ -87,7 +87,7 @@ describe('migrateRule headers', () => {
     expect(out.match.headers).not.toBe((raw.match as Record<string, unknown>).headers);
 
     (out.match.headers as HeaderRow[])[0].value = 'mutated';
-    out.action.headers['Content-Type'] = 'mutated';
+    (out.action as Extract<MockRule['action'], { status: number }>).headers['Content-Type'] = 'mutated';
     expect(JSON.stringify(raw)).toBe(before);
   });
 

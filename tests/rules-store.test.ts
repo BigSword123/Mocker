@@ -146,8 +146,8 @@ describe('RulesStore', () => {
     };
     await store.add(withError);
     const listed = store.list()[0];
-    listed.action.networkError!.probability = 0;
-    expect(store.list()[0].action.networkError!.probability).toBe(50);
+    (listed!.action as Extract<MockRule['action'], { status: number }>).networkError!.probability = 0;
+    expect((store.list()[0]!.action as Extract<MockRule['action'], { status: number }>).networkError!.probability).toBe(50);
   });
 
   it('clones HeaderRow arrays and body form rows so mutating a listed rule cannot affect the store', async () => {
