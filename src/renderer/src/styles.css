@@ -23,6 +23,8 @@ input:disabled, select:disabled, textarea:disabled { color: #9b9ca6; background:
 .traffic-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 .toolbar { display: flex; gap: 8px; align-items: center; padding: 10px 14px; }
 .toolbar input { flex: 1; max-width: 420px; }
+.toolbar select { max-width: 130px; }
+.toolbar .filter-host { flex: 0 1 180px; }
 .split { flex: 1; display: flex; overflow: hidden; min-height: 0; }
 .traffic-table { flex: 3; overflow-y: auto; border-right: 1px solid #33343c; }
 .traffic-table .row { display: flex; align-items: center; gap: 8px; padding: 0 12px; cursor: default; border-bottom: 1px solid #2a2b32; }

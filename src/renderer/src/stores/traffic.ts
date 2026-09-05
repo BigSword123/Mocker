@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import type { TrafficEvent } from '../../../shared/types';
+import type { TrafficEvent, TrafficFilter } from '../../../shared/types';
+import { EMPTY_FILTER } from '../lib/traffic-filter';
 
 const MAX_EVENTS = 2000;
 
@@ -7,8 +8,9 @@ interface TrafficState {
   list: TrafficEvent[];
   connected: boolean;
   paused: boolean;
-  filter: string;
-  setFilter: (f: string) => void;
+  filter: TrafficFilter;
+  setFilter: (patch: Partial<TrafficFilter>) => void;
+  setEvents: (events: TrafficEvent[]) => void;
   togglePause: () => void;
   clear: () => void;
   connect: (wsPort: number) => void;
@@ -30,8 +32,9 @@ export const useTrafficStore = create<TrafficState>((set, get) => ({
   list: [],
   connected: false,
   paused: false,
-  filter: '',
-  setFilter: (filter) => set({ filter }),
+  filter: { ...EMPTY_FILTER },
+  setFilter: (patch) => set({ filter: { ...get().filter, ...patch } }),
+  setEvents: (events) => set({ list: events.slice(-MAX_EVENTS) }),
   togglePause: () => set({ paused: !get().paused }),
   clear: () => {
     pending = [];
