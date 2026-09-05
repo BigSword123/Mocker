@@ -2,12 +2,14 @@ import { useEffect, useState } from 'react';
 import StatusBar from './components/StatusBar';
 import TrafficPanel from './components/TrafficPanel';
 import RulesPanel from './components/RulesPanel';
+import RedirectsPanel from './components/RedirectsPanel';
+import ScenariosPanel from './components/ScenariosPanel';
 import DeviceGuide from './components/DeviceGuide';
 import SettingsPanel from './components/SettingsPanel';
 import { api } from './lib/api';
 import { useTrafficStore } from './stores/traffic';
 
-type Tab = 'traffic' | 'rules' | 'device' | 'settings';
+type Tab = 'traffic' | 'rules' | 'redirects' | 'scenarios' | 'device' | 'settings';
 
 export default function App() {
   const [tab, setTab] = useState<Tab>('traffic');
@@ -22,13 +24,17 @@ export default function App() {
       <StatusBar />
       <nav className="tabs">
         <button data-testid="traffic-tab" className={tab === 'traffic' ? 'active' : ''} onClick={() => setTab('traffic')}>流量</button>
-        <button className={tab === 'rules' ? 'active' : ''} onClick={() => setTab('rules')}>规则</button>
-        <button className={tab === 'device' ? 'active' : ''} onClick={() => setTab('device')}>设备接入</button>
-        <button className={tab === 'settings' ? 'active' : ''} onClick={() => setTab('settings')}>设置</button>
+        <button data-testid="rules-tab" className={tab === 'rules' ? 'active' : ''} onClick={() => setTab('rules')}>规则</button>
+        <button data-testid="redirects-tab" className={tab === 'redirects' ? 'active' : ''} onClick={() => setTab('redirects')}>重定向</button>
+        <button data-testid="scenarios-tab" className={tab === 'scenarios' ? 'active' : ''} onClick={() => setTab('scenarios')}>场景</button>
+        <button data-testid="device-tab" className={tab === 'device' ? 'active' : ''} onClick={() => setTab('device')}>设备接入</button>
+        <button data-testid="settings-tab" className={tab === 'settings' ? 'active' : ''} onClick={() => setTab('settings')}>设置</button>
       </nav>
       <main className="content">
         {tab === 'traffic' && <TrafficPanel />}
         {tab === 'rules' && <RulesPanel />}
+        {tab === 'redirects' && <RedirectsPanel />}
+        {tab === 'scenarios' && <ScenariosPanel />}
         {tab === 'device' && <DeviceGuide />}
         {tab === 'settings' && <SettingsPanel />}
       </main>
