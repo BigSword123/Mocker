@@ -105,7 +105,7 @@ describe('sendReplay with rules', () => {
   });
 
   it('renders templates with the replay request context', async () => {
-    const rule = mockRule(`http://127.0.0.1:${port}/tpl`);
+    const rule = mockRule(`http://127.0.0.1:${port}/tpl?x=7`);
     rule.action = { status: 200, headers: {}, body: 'q={{req.query.x}}' };
     const { svc, events } = service([rule]);
     await svc.send({ method: 'GET', url: `http://127.0.0.1:${port}/tpl?x=7`, headers: {}, body: '' });
