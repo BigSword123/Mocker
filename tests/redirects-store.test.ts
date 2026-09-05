@@ -38,11 +38,11 @@ describe('RedirectsStore', () => {
     expect(store.list()).toHaveLength(0);
   });
 
-  it('list is sorted by priority', async () => {
+  it('list is sorted by priority ascending', async () => {
     const a = await store.add(ruleInput({ name: 'a' }));
     await store.add(ruleInput({ name: 'b' }));
     await store.update(a.id, { priority: 10 });
-    expect(store.list().map((r) => r.name)).toEqual(['a', 'b']);
+    expect(store.list().map((r) => r.name)).toEqual(['b', 'a']);
   });
 
   it('update partial patch', async () => {
