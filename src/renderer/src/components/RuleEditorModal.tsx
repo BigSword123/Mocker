@@ -104,10 +104,11 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
     matchStrategy: 'contains',
   };
   const [bodyRule, setBodyRule] = useState<RuleBody>(seedBody);
-  const [status, setStatus] = useState(seed?.action.status ?? 200);
+  const seedAction = seed && !('responses' in seed.action) ? seed.action : undefined;
+  const [status, setStatus] = useState<number>(seedAction?.status ?? 200);
   const [respHeadersRows, setRespHeadersRows] = useState<HeaderRow[]>(() => {
-    if (seed?.action.headers) {
-      return Object.entries(seed.action.headers).map(([name, value]) => ({
+    if (seedAction?.headers) {
+      return Object.entries(seedAction.headers).map(([name, value]) => ({
         enabled: true,
         name,
         value,
@@ -116,17 +117,17 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
     }
     return [{ enabled: true, name: '', value: '', description: '' }];
   });
-  const [body, setBody] = useState(seed?.action.body ?? '');
+  const [body, setBody] = useState<string>(seedAction?.body ?? '');
 
-  const [delayMs, setDelayMs] = useState<number | ''>(seed?.action.delayMs ?? '');
-  const [fakerLocale, setFakerLocale] = useState(seed?.action.fakerLocale ?? 'zh_CN');
-  const [neEnabled, setNeEnabled] = useState(Boolean(seed?.action.networkError));
+  const [delayMs, setDelayMs] = useState<number | ''>(seedAction?.delayMs ?? '');
+  const [fakerLocale, setFakerLocale] = useState(seedAction?.fakerLocale ?? 'zh_CN');
+  const [neEnabled, setNeEnabled] = useState(Boolean(seedAction?.networkError));
   const [neProbability, setNeProbability] = useState<number | ''>(
-    seed?.action.networkError?.probability ?? 100,
+    seedAction?.networkError?.probability ?? 100,
   );
-  const [neType, setNeType] = useState<NetworkErrorType>(seed?.action.networkError?.type ?? 'ECONNRESET');
+  const [neType, setNeType] = useState<NetworkErrorType>(seedAction?.networkError?.type ?? 'ECONNRESET');
   const [neStatusCode, setNeStatusCode] = useState<number | ''>(
-    seed?.action.networkError?.errorStatusCode ?? '',
+    seedAction?.networkError?.errorStatusCode ?? '',
   );
   const [preview, setPreview] = useState('');
   const previewTokens = useMemo(() => tokenizeJson(preview), [preview]);

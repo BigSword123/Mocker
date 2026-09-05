@@ -73,7 +73,7 @@ export default function RulesPanel() {
               </td>
               <td className="col-name" title={r.name}>{r.name}</td>
               <td className="col-match muted" title={`${r.match.method} ${r.match.urlPattern}`}>{r.match.method} {r.match.urlPattern}</td>
-              <td className="col-response muted">{r.action.status}</td>
+              <td className="col-response muted">{'status' in r.action ? r.action.status : '—'}</td>
               <td className="col-ops">
                 <div className="ops">
                   <button onClick={() => move(r, -1)}>↑</button>
