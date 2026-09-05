@@ -61,6 +61,7 @@ export interface TrafficEvent {
   errorTriggered?: boolean;
   origin?: 'capture' | 'replay' | 'imported';
   replayedFromId?: string;
+  sequenceIndex?: number;
 }
 
 export interface ReplayRequest {
@@ -128,13 +129,42 @@ export interface NetworkError {
   errorStatusCode?: number;
 }
 
-export interface RuleAction {
+export type RuleAction =
+  | {
+      kind?: 'static';
+      status: number;
+      headers: Record<string, string>;
+      body: string;
+      delayMs?: number;
+      fakerLocale?: string;
+      networkError?: NetworkError;
+    }
+  | {
+      kind: 'sequential';
+      responses: SequentialResponse[];
+      fakerLocale?: string;
+    };
+
+export interface SequentialResponse {
   status: number;
   headers: Record<string, string>;
   body: string;
-  delayMs?: number;
-  fakerLocale?: string;
-  networkError?: NetworkError;
+}
+
+export interface RedirectRule {
+  id: string;
+  name: string;
+  enabled: boolean;
+  scenario?: string;
+  priority: number;
+  match: RuleMatch;
+  action: 'mapLocal' | 'mapRemote';
+  target: string;
+}
+
+export interface Scenario {
+  name: string;
+  enabled: boolean;
 }
 
 export interface RenderContext {
