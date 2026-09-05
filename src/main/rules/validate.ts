@@ -6,7 +6,7 @@ import {
 } from '../../shared/types';
 
 export function validateAction(action: RuleAction): void {
-  if (action.kind === 'sequential') {
+  if ('responses' in action) {
     if (!Array.isArray(action.responses) || action.responses.length === 0) {
       throw new Error('序列响应至少需要 1 个响应');
     }

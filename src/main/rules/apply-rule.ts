@@ -28,7 +28,7 @@ export async function computeMockResult(
   ctx: RenderContext,
   options: MockComputationOptions = {},
 ): Promise<MockComputation> {
-  if (matched.action.kind === 'sequential') {
+  if ('responses' in matched.action) {
     const responses = matched.action.responses;
     const idx = Math.max(0, Math.min(options.sequenceIndex ?? 0, responses.length - 1));
     const step = responses[idx]!;

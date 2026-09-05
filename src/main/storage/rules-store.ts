@@ -35,9 +35,8 @@ function cloneRule(rule: MockRule): MockRule {
         : {}),
     },
   } as MockRule;
-  if (rule.action.kind === 'sequential') {
+  if ('responses' in rule.action) {
     base.action = {
-      kind: 'sequential',
       responses: rule.action.responses.map((r) => ({ ...r, headers: { ...r.headers } })),
       ...(rule.action.fakerLocale !== undefined ? { fakerLocale: rule.action.fakerLocale } : {}),
     };

@@ -131,7 +131,6 @@ export interface NetworkError {
 
 export type RuleAction =
   | {
-      kind?: 'static';
       status: number;
       headers: Record<string, string>;
       body: string;
@@ -140,7 +139,6 @@ export type RuleAction =
       networkError?: NetworkError;
     }
   | {
-      kind: 'sequential';
       responses: SequentialResponse[];
       fakerLocale?: string;
     };
