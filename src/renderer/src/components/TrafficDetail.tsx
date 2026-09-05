@@ -1,4 +1,7 @@
+import { useEffect, useState } from 'react';
 import type { TrafficEvent } from '../../../shared/types';
+import { api } from '../lib/api';
+import { buildCurl, defaultDialectFor, type CurlDialect } from '../lib/curl';
 
 function pretty(body: string | undefined): string {
   if (!body) return '';
@@ -31,10 +34,35 @@ function HeaderTable({ headers }: { headers?: Record<string, string> }) {
 interface Props {
   event: TrafficEvent | null;
   onCaptureToRule?: (event: TrafficEvent) => void;
+  onReplay?: (event: TrafficEvent) => void;
+  onCompose?: (event: TrafficEvent) => void;
 }
 
-export default function TrafficDetail({ event, onCaptureToRule }: Props) {
+export default function TrafficDetail({ event, onCaptureToRule, onReplay, onCompose }: Props) {
+  const [dialect, setDialect] = useState<CurlDialect>('bash');
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    api.appPlatform()
+      .then((p) => setDialect(defaultDialectFor(p)))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    setCopied(false);
+  }, [event?.id]);
+
   if (!event) return <div className="detail empty">选择一个请求查看详情</div>;
+
+  const copyCurl = async () => {
+    try {
+      await navigator.clipboard.writeText(buildCurl(event, dialect));
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  };
+
   return (
     <div className="detail">
       <div className="detail-head">
@@ -44,6 +72,29 @@ export default function TrafficDetail({ event, onCaptureToRule }: Props) {
             转为规则
           </button>
         )}
+        {onReplay && (
+          <button data-testid="replay" onClick={() => onReplay(event)}>
+            重放
+          </button>
+        )}
+        {onCompose && (
+          <button data-testid="compose" onClick={() => onCompose(event)}>
+            编辑后重发…
+          </button>
+        )}
+        <select
+          data-testid="curl-dialect"
+          aria-label="cURL 方言"
+          value={dialect}
+          onChange={(e) => setDialect(e.target.value as CurlDialect)}
+        >
+          <option value="bash">bash</option>
+          <option value="cmd">cmd</option>
+          <option value="powershell">PowerShell</option>
+        </select>
+        <button data-testid="copy-curl" onClick={copyCurl}>
+          {copied ? '已复制' : 'Copy as cURL'}
+        </button>
       </div>
       {event.error && <div className="text-err">错误：{event.error}</div>}
       {event.mocked && <div className="text-ok">由规则命中（{event.matchedRuleId}）</div>}

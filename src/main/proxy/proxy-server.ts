@@ -3,9 +3,8 @@ import * as mockttp from 'mockttp';
 import type { MockRule, Settings, TrafficEvent } from '../../shared/types';
 import { findMatchingRule } from '../rules/engine';
 import type { RequestDescription } from '../rules/matcher';
-import { renderTemplate, type RenderContext } from '../rules/template';
-import { resolveNetworkError } from '../rules/network-error';
-import { sleep } from '../util/sleep';
+import { computeMockResult, type MockComputation } from '../rules/apply-rule';
+import type { RenderContext } from '../rules/template';
 import { certDownloadResponse, guidePageResponse, type OnboardingResponse } from './onboarding';
 
 export interface ProxyServerOptions {
@@ -193,13 +192,22 @@ export class ProxyServer {
     event.mocked = true;
     event.matchedRuleId = matched.id;
 
-    const ne = matched.action.networkError;
-    if (ne && Math.random() * 100 < ne.probability) {
+    let result: MockComputation;
+    try {
+      result = await computeMockResult(matched, buildRenderContext(req, bodyText), {
+        signal: this.abort?.signal,
+      });
+    } catch {
+      // Proxy is stopping; drop the request rather than forward it.
+      return { response: 'close' };
+    }
+
+    if (result.networkError) {
       event.errorTriggered = true;
-      event.error = `network-error:${ne.type}`;
+      event.error = `network-error:${matched.action.networkError?.type ?? ''}`;
       event.completedAt = Date.now();
       this.emit(event);
-      const resolution = resolveNetworkError(ne);
+      const resolution = result.networkError;
       if (resolution.kind === 'reset') return { response: 'reset' };
       if (resolution.kind === 'close') return { response: 'close' };
       return {
@@ -207,36 +215,18 @@ export class ProxyServer {
       };
     }
 
-    const delayMs = matched.action.delayMs ?? 0;
-    if (delayMs > 0) {
-      try {
-        await sleep(delayMs, this.abort?.signal);
-      } catch {
-        // Proxy is stopping; drop the request rather than forward it.
-        return { response: 'close' };
-      }
-    }
-
-    const ctx = buildRenderContext(req, bodyText);
-    const warnings: string[] = [];
-    const body = renderTemplate(matched.action.body, ctx, matched.action.fakerLocale, warnings);
-    const headers: Record<string, string> = {};
-    for (const [k, v] of Object.entries(matched.action.headers)) {
-      headers[k] = renderTemplate(v, ctx, matched.action.fakerLocale, warnings);
-    }
-
-    event.status = matched.action.status;
-    event.responseHeaders = headers;
-    event.responseBody = body;
-    event.renderWarnings = warnings.length > 0 ? warnings : undefined;
+    event.status = result.status;
+    event.responseHeaders = result.headers;
+    event.responseBody = result.body;
+    event.renderWarnings = result.warnings.length > 0 ? result.warnings : undefined;
     event.completedAt = Date.now();
     this.emit(event);
 
     return {
       response: toCallbackResponse({
-        statusCode: matched.action.status,
-        headers,
-        body,
+        statusCode: result.status,
+        headers: result.headers,
+        body: result.body,
       }),
     };
   }

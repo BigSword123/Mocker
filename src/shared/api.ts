@@ -1,4 +1,4 @@
-import type { CertInfo, CertInstallCommands, MockRule, ProxyStatus, RenderContext, RuleAction, RuleInput, RulePatch, Settings } from './types';
+import type { CertInfo, CertInstallCommands, MockRule, ProxyStatus, RenderContext, ReplayRequest, RuleAction, RuleInput, RulePatch, Settings, TrafficEvent } from './types';
 
 export interface Api {
   proxyStart(): Promise<void>;
@@ -20,6 +20,10 @@ export interface Api {
   certInstallCommands(): Promise<CertInstallCommands>;
   systemProxySet(enabled: boolean): Promise<void>;
   systemProxyStatus(): Promise<boolean>;
+  appPlatform(): Promise<'macos' | 'windows' | 'other'>;
+  replaySend(input: ReplayRequest, replayedFromId?: string): Promise<string>;
+  harExport(payload: { events: TrafficEvent[]; defaultName: string }): Promise<{ saved: boolean; filePath?: string }>;
+  harImport(): Promise<{ events: TrafficEvent[] | null }>;
 }
 
 declare global {

@@ -56,6 +56,15 @@ curl -x http://127.0.0.1:8888 "http://www.example.com/"
 
 请求头、响应头与请求体（form-data / x-www-form-urlencoded）均改为 Postman 风格的可编辑表格：每行含 ✓ / 名称 / 值 / 描述 / ×，未勾选的行不参与匹配；请求体额外支持 `none / raw / form-data / x-www-form-urlencoded` 四种模式 tabs，raw 模式可选「包含 / 完全相等 / JSON 深度相等」三种匹配策略。
 
+### 流量操作
+
+「流量」页工具栏与详情区提供四个日常操作：
+
+- **分面过滤**：方法下拉、状态码下拉（2xx–5xx、错误）、域名输入、全文搜索框（URL + 请求/响应头 + 请求/响应体），条件 AND 组合；「清除」一键还原
+- **重放 / 编辑后重发**：详情区「重放」原样重发选中请求；「编辑后重发…」打开弹窗可改方法、URL、请求头与请求体（none / raw / form-data / urlencoded）再发。重放会照常命中 Mock 规则（含延迟 / 异常 / 模板），新条目带「重放」角标，可继续链式重放
+- **Copy as cURL**：详情区复制选中请求为 cURL 命令，方言可选 bash / cmd / PowerShell（默认跟随当前系统），hop-by-hop 头自动省略
+- **HAR 导入 / 导出**：「导出 HAR」把当前过滤结果存为 HAR 1.2 文件（保留 mock 标记）；「导入 HAR」加载外部 HAR 文件并替换当前流量列表查看，导入条目带「导入」角标，同样支持转规则
+
 ## 开发
 
 - `npm install`

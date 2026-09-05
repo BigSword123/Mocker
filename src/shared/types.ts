@@ -59,6 +59,22 @@ export interface TrafficEvent {
   error?: string;
   renderWarnings?: string[];
   errorTriggered?: boolean;
+  origin?: 'capture' | 'replay' | 'imported';
+  replayedFromId?: string;
+}
+
+export interface ReplayRequest {
+  method: string;
+  url: string;
+  headers: Record<string, string>;
+  body: string;
+}
+
+export interface TrafficFilter {
+  text: string;
+  method: string;
+  status: string;
+  host: string;
 }
 
 export type HttpsMode = 'whitelist' | 'full';
