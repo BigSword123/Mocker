@@ -69,7 +69,10 @@ async function applyMock(
   event.matchedRuleId = matched.id;
   if (result.networkError) {
     event.errorTriggered = true;
-    const neType = 'responses' in matched.action ? matched.action.networkError?.type : undefined;
+    let neType: string | undefined;
+    if (!('responses' in matched.action)) {
+      neType = matched.action.networkError?.type;
+    }
     event.error = `network-error:${neType ?? ''}`;
     if (result.networkError.kind === 'respond') {
       event.status = result.networkError.statusCode;
