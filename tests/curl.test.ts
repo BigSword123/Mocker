@@ -16,7 +16,7 @@ function event(overrides: Partial<TrafficEvent> = {}): TrafficEvent {
       'content-type': 'application/json',
       'content-length': '15',
       connection: 'keep-alive',
-      'x-token': "it's",
+      'x-token': "say\"hi",
     },
     requestBody: '{"amount":100}',
     mocked: false,
@@ -30,7 +30,7 @@ describe('buildCurl', () => {
     expect(cmd.startsWith('curl -X POST ')).toBe(true);
     expect(cmd).toContain("'http://api.example.com/orders'");
     expect(cmd).toContain("-H 'content-type: application/json'");
-    expect(cmd).toContain("-H 'x-token: it'\\''s'");
+    expect(cmd).toContain("-H 'x-token: say\"hi'");
     expect(cmd).not.toContain('host:');
     expect(cmd).not.toContain('content-length');
     expect(cmd).not.toContain('connection');
@@ -44,14 +44,14 @@ describe('buildCurl', () => {
   it('cmd: double quotes, backslash-slash escape, caret continuation', () => {
     const cmd = buildCurl(event(), 'cmd');
     expect(cmd).toContain('"http://api.example.com/orders"');
-    expect(cmd).toContain('-H "x-token: it\\"s"');
+    expect(cmd).toContain('-H "x-token: say\\"hi"');
     expect(cmd).toContain(' ^\n  ');
   });
 
   it('powershell: backtick escape and backtick continuation', () => {
     const cmd = buildCurl(event(), 'powershell');
     expect(cmd).toContain(' `\n  ');
-    expect(cmd).toContain('-H "x-token: it`s"');
+    expect(cmd).toContain('-H "x-token: say`"hi"');
   });
 
   it('binary body becomes a comment instead of data (bash)', () => {
