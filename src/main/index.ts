@@ -4,10 +4,12 @@ import { Bridge } from './bridge/ws-server';
 import { ensureCa } from './certs/ca';
 import { registerIpc } from './ipc';
 import { ProxyServer } from './proxy/proxy-server';
+import { ReplayService } from './replay/replay';
 import { HistoryWriter } from './storage/history';
 import { RulesStore } from './storage/rules-store';
 import { SettingsStore } from './storage/settings-store';
 import { disableSystemProxy } from './system-proxy';
+import type { TrafficEvent } from '../shared/types';
 
 // Held as a module-level reference so the window is not garbage-collected.
 let mainWindow: BrowserWindow | null = null;
@@ -51,16 +53,20 @@ async function bootstrap(): Promise<void> {
   const bridge = new Bridge();
   await bridge.start(settings.get().wsPort);
 
+  const onEvent = (event: TrafficEvent): void => {
+    bridge.publish(event);
+    history.write(event);
+  };
+
   const proxy = new ProxyServer({
     caKey: ca.keyPem,
     caCert: ca.certPem,
     getSettings: () => settings.get(),
     getRules: () => rules.list(),
-    onEvent: (event) => {
-      bridge.publish(event);
-      history.write(event);
-    },
+    onEvent,
   });
+
+  const replay = new ReplayService({ getRules: () => rules.list(), onEvent });
 
   registerIpc({
     proxy,
@@ -73,6 +79,7 @@ async function bootstrap(): Promise<void> {
     onSystemProxyChanged: (enabled) => {
       systemProxySetByUs = enabled;
     },
+    replay,
   });
 
   if (settings.get().autoStartProxy) {

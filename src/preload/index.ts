@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { Api } from '../shared/api';
-import type { RenderContext, RuleAction, RuleInput, RulePatch, Settings } from '../shared/types';
+import type { RenderContext, ReplayRequest, RuleAction, RuleInput, RulePatch, Settings, TrafficEvent } from '../shared/types';
 
 const api: Api = {
   proxyStart: () => ipcRenderer.invoke('proxy:start'),
@@ -19,6 +19,12 @@ const api: Api = {
   certInstallCommands: () => ipcRenderer.invoke('cert:install-commands'),
   systemProxySet: (enabled: boolean) => ipcRenderer.invoke('system-proxy:set', enabled),
   systemProxyStatus: () => ipcRenderer.invoke('system-proxy:status'),
+  appPlatform: () => ipcRenderer.invoke('app:platform'),
+  replaySend: (input: ReplayRequest, replayedFromId?: string) =>
+    ipcRenderer.invoke('replay:send', input, replayedFromId),
+  harExport: (payload: { events: TrafficEvent[]; defaultName: string }) =>
+    ipcRenderer.invoke('har:export', payload),
+  harImport: () => ipcRenderer.invoke('har:import'),
 };
 
 contextBridge.exposeInMainWorld('api', api);

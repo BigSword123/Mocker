@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron';
+import { BrowserWindow, dialog, ipcMain } from 'electron';
+import * as fs from 'node:fs';
 import { networkInterfaces } from 'node:os';
 import type { ProxyServer } from './proxy/proxy-server';
 import type { HistoryWriter } from './storage/history';
@@ -7,9 +8,12 @@ import type { SettingsStore } from './storage/settings-store';
 import { disableSystemProxy, enableSystemProxy, systemProxyEnabled } from './system-proxy';
 import type { CaMaterial } from './certs/ca';
 import { buildCertInstallCommands } from './certs/install-commands';
-import type { RenderContext, RuleAction, RuleInput, RulePatch, Settings } from '../shared/types';
+import type { RenderContext, ReplayRequest, RuleAction, RuleInput, RulePatch, Settings, TrafficEvent } from '../shared/types';
+import type { OpenDialogOptions, SaveDialogOptions } from 'electron';
 import { validateAction } from './rules/validate';
 import { renderTemplate } from './rules/template';
+import { fromHar, toHar } from '../shared/har';
+import type { ReplayService } from './replay/replay';
 
 export interface IpcContext {
   proxy: ProxyServer;
@@ -20,6 +24,7 @@ export interface IpcContext {
   dataDir: string;
   systemProxySetByUs: () => boolean;
   onSystemProxyChanged: (enabled: boolean) => void;
+  replay: ReplayService;
 }
 
 export function localIps(): string[] {
@@ -103,4 +108,42 @@ export function registerIpc(ctx: IpcContext): void {
     ctx.onSystemProxyChanged(enabled);
   });
   ipcMain.handle('system-proxy:status', () => systemProxyEnabled());
+
+  ipcMain.handle('app:platform', () =>
+    process.platform === 'darwin' ? 'macos' : process.platform === 'win32' ? 'windows' : 'other',
+  );
+
+  ipcMain.handle('replay:send', (_e, input: ReplayRequest, replayedFromId?: string) =>
+    ctx.replay.send(input, replayedFromId),
+  );
+
+  ipcMain.handle('har:export', async (_e, payload: { events: TrafficEvent[]; defaultName: string }) => {
+    const { canceled, filePath } = await showSaveDialog({
+      defaultPath: payload.defaultName,
+      filters: [{ name: 'HAR', extensions: ['har'] }],
+    });
+    if (canceled || !filePath) return { saved: false as const };
+    await fs.promises.writeFile(filePath, JSON.stringify(toHar(payload.events), null, 2), 'utf8');
+    return { saved: true as const, filePath };
+  });
+
+  ipcMain.handle('har:import', async () => {
+    const { canceled, filePaths } = await showOpenDialog({
+      filters: [{ name: 'HAR', extensions: ['har'] }],
+      properties: ['openFile'],
+    });
+    if (canceled || filePaths.length === 0) return { events: null };
+    const text = await fs.promises.readFile(filePaths[0]!, 'utf8');
+    return { events: fromHar(text) };
+  });
+}
+
+async function showSaveDialog(opts: SaveDialogOptions) {
+  const win = BrowserWindow.getFocusedWindow();
+  return win ? dialog.showSaveDialog(win, opts) : dialog.showSaveDialog(opts);
+}
+
+async function showOpenDialog(opts: OpenDialogOptions) {
+  const win = BrowserWindow.getFocusedWindow();
+  return win ? dialog.showOpenDialog(win, opts) : dialog.showOpenDialog(opts);
 }
