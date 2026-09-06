@@ -19,4 +19,6 @@ test('usb direct-connect section renders regardless of adb availability', async 
   await expect(win.getByTestId('adb-tunnel')).toBeVisible();
   await expect(win.getByTestId('adb-clear')).toBeVisible();
   // 不点会修改手机状态的操作按钮
+  await expect(win.getByRole('heading', { name: '手动操作' })).toBeVisible();
+  await expect(win.getByText('结束后清理（必做，否则手机断网）')).toBeVisible();
 });

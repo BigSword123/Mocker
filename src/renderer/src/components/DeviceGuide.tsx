@@ -25,7 +25,6 @@ export default function DeviceGuide() {
     refreshAdb();
   };
   const adbReady = !!adb?.adbAvailable && !!adb?.activeSerial;
-  const usbCmds = status ? [`adb reverse tcp:${status.port} tcp:${status.port}`, `adb shell settings put global http_proxy 127.0.0.1:${status.port}`] : [];
 
   useEffect(() => {
     api.proxyStatus().then(setStatus).catch(() => {});
@@ -84,12 +83,18 @@ export default function DeviceGuide() {
         <button data-testid="adb-clear" className="primary" disabled={!adbReady} onClick={() => runAdb(() => api.adbClearPhoneProxy())}>一键恢复手机网络</button>
       </div>
       {adbMsg && <p className="muted">{adbMsg}</p>}
-      {adb && !adb.adbAvailable && usbCmds.length > 0 && (
-        <div>
-          {usbCmds.map((cmd) => (
-            <CmdRow key={cmd} cmd={cmd} />
-          ))}
-        </div>
+      {status && (
+        <>
+          <h4>手动操作</h4>
+          <CmdRow label="确认设备已连接（state 需为 device）" cmd="adb devices" />
+          <CmdRow label="建立隧道（手机 127.0.0.1 → 电脑代理端口）" cmd={`adb reverse tcp:${status.port} tcp:${status.port}`} />
+          <CmdRow label="设置手机全局代理" cmd={`adb shell settings put global http_proxy 127.0.0.1:${status.port}`} />
+          <CmdRow label="验证隧道（应看到 tcp:端口映射）" cmd="adb reverse --list" />
+          <CmdRow label="验证手机代理（应返回 127.0.0.1:端口）" cmd="adb shell settings get global http_proxy" />
+          <CmdRow label="结束后清理（必做，否则手机断网）" cmd="adb shell settings put global http_proxy :0" />
+          <CmdRow label="删除隧道（可选）" cmd={`adb reverse --remove tcp:${status.port}`} />
+          <p className="muted">多设备时所有命令在 adb 后加 <code>-s &lt;serial&gt;</code>（serial 见 <code>adb devices</code>）。</p>
+        </>
       )}
       <p className="text-warn">
         用完或拔线前务必点「一键恢复手机网络」，否则手机全局代理指向已失效端口会直接断网；拔线/重连后隧道失效，重新「建立隧道」即可。
@@ -108,7 +113,7 @@ export default function DeviceGuide() {
   );
 }
 
-function CmdRow({ cmd }: { cmd: string }) {
+function CmdRow({ label, cmd }: { label?: string; cmd: string }) {
   const [copied, setCopied] = useState(false);
   const copy = async () => {
     try {
@@ -120,9 +125,12 @@ function CmdRow({ cmd }: { cmd: string }) {
     }
   };
   return (
-    <div className="cert-cmd-row">
-      <code>{cmd}</code>
-      <button onClick={copy}>{copied ? '已复制' : '复制'}</button>
+    <div style={{ margin: '4px 0' }}>
+      {label && <div className="muted">{label}</div>}
+      <div className="cert-cmd-row">
+        <code>{cmd}</code>
+        <button onClick={copy}>{copied ? '已复制' : '复制'}</button>
+      </div>
     </div>
   );
 }
