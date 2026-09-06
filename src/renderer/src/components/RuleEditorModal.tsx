@@ -140,14 +140,21 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
   );
   const [scenario, setScenario] = useState<string | undefined>(seed?.scenario);
 
-  const updateSeq = (idx: number, patch: Partial<SequentialResponse>) => {
+  const patchSeq = (idx: number, patch: Partial<SequentialResponse>) => {
     setSeqResponses((prev) => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
+  };
+  const updateSeq = (idx: number, patch: Partial<SequentialResponse>) => {
+    patchSeq(idx, patch);
+    // 模板标记的语义是「最后一条响应与模板一致」，只有改动最后一条才算脱离模板
+    if (idx === seqResponses.length - 1) clearTemplate();
   };
   const removeSeq = (idx: number) => {
     setSeqResponses((prev) => prev.filter((_, i) => i !== idx));
+    clearTemplate();
   };
   const addSeq = () => {
     setSeqResponses((prev) => [...prev, { status: 200, headers: {}, body: '' }]);
+    clearTemplate();
   };
   const [preview, setPreview] = useState('');
   const previewTokens = useMemo(() => tokenizeJson(preview), [preview]);
@@ -165,6 +172,22 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
     setSelectedTemplateId(id);
     const template = findErrorTemplate(id);
     if (!template) return;
+    if (mode === 'sequential') {
+      // 序列模式下模板填入最后一条响应；连接类模板是规则级网络异常，对单条响应不可表达
+      if (template.payload.kind !== 'http' || seqResponses.length === 0) return;
+      const idx = seqResponses.length - 1;
+      const row = seqResponses[idx]!;
+      patchSeq(idx, {
+        status: template.payload.status,
+        body: template.payload.body,
+        headers: {
+          'content-type': 'application/json',
+          ...row.headers,
+          ...template.payload.headers,
+        },
+      });
+      return;
+    }
     const next = applyErrorTemplate(
       { status, body, respHeadersRows, neEnabled, neProbability, neType },
       template,
@@ -390,44 +413,82 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
               ariaLabel="请求体表单"
             />
           )}
-          <label>响应状态码</label>
-          <input
-            type="number"
-            value={status}
-            disabled={connectionOnly}
-            aria-describedby={connectionOnly ? CONNECTION_NOTE_ID : undefined}
-            onChange={(e) => {
-              setStatus(Number(e.target.value));
-              clearTemplate();
-            }}
-          />
-          <label>响应头</label>
-          <EditableTable
-            rows={respHeadersRows}
-            onChange={(rows) => {
-              setRespHeadersRows(rows);
-              clearTemplate();
-            }}
-            ariaLabel="响应头"
-          />
-          <label>响应体</label>
-          <JsonBodyEditor
-            rows={16}
-            value={body}
-            disabled={connectionOnly}
-            describedBy={connectionOnly ? CONNECTION_NOTE_ID : undefined}
-            textareaRef={bodyRef}
-            onChange={(v) => {
-              setBody(v);
-              clearTemplate();
-            }}
-            placeholder='{"code":0}'
-            ariaLabel="响应体"
-          />
-          {connectionOnly && (
-            <p className="form-note" id={CONNECTION_NOTE_ID}>
-              连接异常模板会让请求在连接层失败，不返回任何响应，因此状态码与响应体暂不可编辑；取消勾选「网络异常」即可恢复。
-            </p>
+          {mode === 'static' ? (
+            <>
+              <label>响应状态码</label>
+              <input
+                type="number"
+                value={status}
+                disabled={connectionOnly}
+                aria-describedby={connectionOnly ? CONNECTION_NOTE_ID : undefined}
+                onChange={(e) => {
+                  setStatus(Number(e.target.value));
+                  clearTemplate();
+                }}
+              />
+              <label>响应头</label>
+              <EditableTable
+                rows={respHeadersRows}
+                onChange={(rows) => {
+                  setRespHeadersRows(rows);
+                  clearTemplate();
+                }}
+                ariaLabel="响应头"
+              />
+              <label>响应体</label>
+              <JsonBodyEditor
+                rows={16}
+                value={body}
+                disabled={connectionOnly}
+                describedBy={connectionOnly ? CONNECTION_NOTE_ID : undefined}
+                textareaRef={bodyRef}
+                onChange={(v) => {
+                  setBody(v);
+                  clearTemplate();
+                }}
+                placeholder='{"code":0}'
+                ariaLabel="响应体"
+              />
+              {connectionOnly && (
+                <p className="form-note" id={CONNECTION_NOTE_ID}>
+                  连接异常模板会让请求在连接层失败，不返回任何响应，因此状态码与响应体暂不可编辑；取消勾选「网络异常」即可恢复。
+                </p>
+              )}
+            </>
+          ) : (
+            <>
+              <label>序列响应</label>
+              <div data-testid="sequential-editor">
+                {seqResponses.map((r, i) => (
+                  <div key={i} className="seq-row" data-testid={`seq-row-${i}`}>
+                    <div className="seq-row-head">
+                      <span className="seq-index">#{i + 1}</span>
+                      <input
+                        type="number"
+                        data-testid={`seq-status-${i}`}
+                        value={r.status}
+                        aria-label={`序列响应 ${i + 1} 状态码`}
+                        onChange={(e) => updateSeq(i, { status: Number(e.target.value) })}
+                      />
+                      <button
+                        type="button"
+                        data-testid={`seq-remove-${i}`}
+                        aria-label={`删除序列响应 ${i + 1}`}
+                        onClick={() => removeSeq(i)}
+                      >×</button>
+                    </div>
+                    <JsonBodyEditor
+                      rows={4}
+                      value={r.body}
+                      onChange={(body) => updateSeq(i, { body })}
+                      placeholder='{"code":0}'
+                      ariaLabel={`序列响应 ${i + 1} 响应体`}
+                    />
+                  </div>
+                ))}
+                <button type="button" data-testid="seq-add" onClick={addSeq}>+ 添加响应</button>
+              </div>
+            </>
           )}
         </div>
 
@@ -473,7 +534,10 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
                   name="response-mode"
                   data-testid="mode-static"
                   checked={mode === 'static'}
-                  onChange={() => setMode('static')}
+                  onChange={() => {
+                    setMode('static');
+                    clearTemplate();
+                  }}
                 />
                 静态响应
               </label>{' '}
@@ -483,7 +547,10 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
                   name="response-mode"
                   data-testid="mode-sequential"
                   checked={mode === 'sequential'}
-                  onChange={() => setMode('sequential')}
+                  onChange={() => {
+                    setMode('sequential');
+                    clearTemplate();
+                  }}
                 />
                 序列响应
               </label>
@@ -494,32 +561,6 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
             <select value={fakerLocale} onChange={(e) => setFakerLocale(e.target.value)}>
               {LOCALES.map((l) => <option key={l} value={l}>{l}</option>)}
             </select>
-            {mode === 'sequential' && (
-              <>
-                <label>序列响应</label>
-                <div data-testid="sequential-editor">
-                  {seqResponses.map((r, i) => (
-                    <div key={i} className="seq-row" data-testid={`seq-row-${i}`}>
-                      <input
-                        type="number"
-                        data-testid={`seq-status-${i}`}
-                        value={r.status}
-                        onChange={(e) => updateSeq(i, { status: Number(e.target.value) })}
-                        placeholder="状态码"
-                      />
-                      <input
-                        data-testid={`seq-body-${i}`}
-                        value={r.body}
-                        onChange={(e) => updateSeq(i, { body: e.target.value })}
-                        placeholder="响应体"
-                      />
-                      <button type="button" data-testid={`seq-remove-${i}`} onClick={() => removeSeq(i)}>×</button>
-                    </div>
-                  ))}
-                  <button type="button" data-testid="seq-add" onClick={addSeq}>+ 添加响应</button>
-                </div>
-              </>
-            )}
             <label htmlFor={TEMPLATE_SELECT_ID}>错误模板</label>
             <select
               id={TEMPLATE_SELECT_ID}
@@ -527,14 +568,20 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
               onChange={(e) => selectTemplate(e.target.value)}
             >
               <option value={CUSTOM_TEMPLATE_ID}>无（自定义）</option>
-              {TEMPLATE_GROUPS.map((group) => (
-                <optgroup key={group.category} label={group.label}>
-                  {ERROR_TEMPLATES.filter((t) => t.category === group.category).map((t) => (
-                    <option key={t.id} value={t.id}>{t.label}</option>
-                  ))}
-                </optgroup>
-              ))}
+              {TEMPLATE_GROUPS.map((group) => {
+                if (mode === 'sequential' && group.category === 'connection') return null;
+                return (
+                  <optgroup key={group.category} label={group.label}>
+                    {ERROR_TEMPLATES.filter((t) => t.category === group.category).map((t) => (
+                      <option key={t.id} value={t.id}>{t.label}</option>
+                    ))}
+                  </optgroup>
+                );
+              })}
             </select>
+            {mode === 'sequential' && (
+              <p className="form-note">模板填入最后一条响应（当前第 {seqResponses.length} 条）</p>
+            )}
             {mode === 'static' && (
               <>
                 <label>延迟（ms）</label>

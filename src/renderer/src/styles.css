@@ -72,7 +72,7 @@ table.kv .k { color: #8ab4ff; width: 200px; }
 .rules-table .col-ops { width: 190px; }
 .rules-table .ops { white-space: nowrap; display: flex; gap: 6px; flex-wrap: nowrap; }
 .modal-mask { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; z-index: 10; }
-.modal { background: #26272e; border-radius: 10px; padding: 20px 24px; width: min(960px, 94vw); max-height: 90vh; overflow-y: auto; }
+.modal { background: #26272e; border-radius: 10px; padding: 20px 24px; width: min(1240px, 94vw); max-height: 92vh; overflow-y: auto; }
 .modal h2 { font-size: 16px; margin-bottom: 14px; }
 .modal .form-grid { max-width: none; grid-template-columns: 130px 1fr; }
 .guide { max-width: 720px; line-height: 1.7; }
@@ -321,6 +321,32 @@ table.kv .k { color: #8ab4ff; width: 200px; }
 }
 .json-editor-box.has-hl textarea::placeholder {
   color: #6f7078;
+}
+[data-testid='sequential-editor'] {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.seq-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid #33343c;
+  border-radius: 6px;
+  padding: 8px;
+}
+.seq-row-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.seq-row-head input[type='number'] {
+  width: 90px;
+}
+.seq-index {
+  color: #8a8b96;
+  font-size: 12px;
 }
 /* 高亮层与 textarea 必须同字体、同换行规则，否则逐字符错位 */
 .json-hl {
