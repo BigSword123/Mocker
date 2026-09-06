@@ -8,6 +8,8 @@ type ActionKind = 'mapLocal' | 'mapRemote';
 
 interface Props {
   initial: RedirectRule | null;
+  /** 新建时预挂的场景 */
+  presetScenario?: string;
   onClose: () => void;
   onSaved: () => void;
 }
@@ -20,7 +22,7 @@ const URL_TYPES: Array<{ value: RuleMatch['urlType']; label: string }> = [
 const METHODS: HttpMethod[] = ['ANY', 'GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'];
 const EMPTY_ROW: HeaderRow = { enabled: true, name: '', value: '', description: '' };
 
-export default function RedirectEditorModal({ initial, onClose, onSaved }: Props) {
+export default function RedirectEditorModal({ initial, presetScenario, onClose, onSaved }: Props) {
   const seed = initial;
   const [name, setName] = useState(seed?.name ?? '');
   const [enabled, setEnabled] = useState(seed?.enabled ?? true);
@@ -35,7 +37,7 @@ export default function RedirectEditorModal({ initial, onClose, onSaved }: Props
   });
   const [actionKind, setActionKind] = useState<ActionKind>(seed?.action ?? 'mapLocal');
   const [target, setTarget] = useState(seed?.target ?? '');
-  const [scenario, setScenario] = useState<string | undefined>(seed?.scenario);
+  const [scenario, setScenario] = useState<string | undefined>(seed?.scenario ?? presetScenario);
   const [error, setError] = useState('');
 
   const chooseFile = async () => {
