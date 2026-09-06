@@ -69,7 +69,7 @@ table.kv .k { color: #8ab4ff; width: 200px; }
 .rules-table .col-name { width: 22%; }
 .rules-table .col-match { width: 38%; }
 .rules-table .col-response { width: 70px; }
-.rules-table .col-ops { width: 190px; }
+.rules-table .col-ops { width: 260px; }
 .rules-table .ops { white-space: nowrap; display: flex; gap: 6px; flex-wrap: nowrap; }
 .modal-mask { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; z-index: 10; }
 .modal { background: #26272e; border-radius: 10px; padding: 20px 24px; width: min(1240px, 94vw); max-height: 92vh; overflow-y: auto; }
@@ -497,3 +497,23 @@ table.kv .k { color: #8ab4ff; width: 200px; }
   color: #e3342f;
   background: transparent;
 }
+
+/* 场景分组小节（规则页/重定向页） */
+.scenario-group { margin-bottom: 18px; }
+.scenario-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: #2b2c34;
+  border-radius: 6px;
+}
+.scenario-head .drag-handle { cursor: grab; color: #8a8b96; user-select: none; }
+.scenario-head .scenario-name { font-weight: 600; }
+.scenario-group.drop-hover .scenario-head { outline: 2px dashed #6ea8fe; }
+.scenario-body .rules-table { margin-top: 6px; }
+.scenario-footer { margin-top: 6px; }
+.scenario-create { display: inline-flex; gap: 8px; align-items: center; }
+.scenario-confirm { display: inline-flex; gap: 8px; align-items: center; }
+.rules-table .ops select { max-width: 110px; }
