@@ -166,15 +166,21 @@ export function registerIpc(ctx: IpcContext): void {
     }
   });
   ipcMain.handle('scenarios:set-enabled', (_e, name: string, enabled: boolean) => ctx.scenarios.setEnabled(name, enabled));
-  ipcMain.handle('scenarios:remove', async (_e, name: string) => {
+  ipcMain.handle('scenarios:remove', async (_e, name: string, moveTo: string | null) => {
+    // 先校验去向再动手：目标不存在时整体放弃，不产生半删除状态
+    if (moveTo !== null && moveTo !== name && !ctx.scenarios.list().some((s) => s.name === moveTo)) {
+      throw new Error(`目标场景不存在: ${moveTo}`);
+    }
     await ctx.scenarios.remove(name);
+    const next = moveTo === null ? undefined : moveTo;
     for (const r of ctx.rules.list()) {
-      if (r.scenario === name) await ctx.rules.update(r.id, { scenario: undefined });
+      if (r.scenario === name) await ctx.rules.update(r.id, { scenario: next });
     }
     for (const r of ctx.redirects.list()) {
-      if (r.scenario === name) await ctx.redirects.update(r.id, { scenario: undefined });
+      if (r.scenario === name) await ctx.redirects.update(r.id, { scenario: next });
     }
   });
+  ipcMain.handle('scenarios:reorder', (_e, names: string[]) => ctx.scenarios.reorder(names));
 
   ipcMain.handle('rules:reset-sequence', (_e, ruleId: string) => {
     ctx.proxy.resetSequenceCounter(ruleId);
