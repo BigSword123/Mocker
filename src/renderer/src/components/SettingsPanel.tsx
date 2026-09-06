@@ -1,5 +1,12 @@
 import { useEffect, useState } from 'react';
-import type { CertInstallCommands, HttpsMode, Settings } from '../../../shared/types';
+import type {
+  CertInstallCommands,
+  HttpsMode,
+  Settings,
+  ThrottlePreset,
+  ThrottleSettings,
+} from '../../../shared/types';
+import { THROTTLE_PRESETS, THROTTLE_PRESET_LABELS } from '../../../shared/types';
 import { api } from '../lib/api';
 
 export default function SettingsPanel() {
@@ -52,6 +59,39 @@ export default function SettingsPanel() {
     } catch (err) {
       setMessage(String(err));
     }
+  };
+
+  // 限速即时生效，不走 save() 的代理重启链路
+  const saveThrottle = async (throttle: ThrottleSettings) => {
+    setSaving(true);
+    try {
+      const next = await api.settingsSet({ throttle });
+      setSettings(next);
+      setMessage('限速设置已保存，即时生效');
+      setTimeout(() => setMessage(''), 3000);
+    } catch (err) {
+      setMessage(String(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const patchThrottle = (p: Partial<ThrottleSettings>) => {
+    if (!settings) return;
+    const next = { ...settings.throttle, ...p };
+    if (p.downKbps !== undefined || p.latencyMs !== undefined || p.jitterMs !== undefined) {
+      next.preset = 'custom';
+    }
+    setSettings({ ...settings, throttle: next });
+  };
+
+  const applyThrottlePreset = (p: ThrottlePreset) => {
+    if (!settings) return;
+    if (p === 'custom') {
+      setSettings({ ...settings, throttle: { ...settings.throttle, preset: 'custom' } });
+      return;
+    }
+    setSettings({ ...settings, throttle: { ...settings.throttle, preset: p, ...THROTTLE_PRESETS[p] } });
   };
 
   return (
@@ -108,6 +148,62 @@ export default function SettingsPanel() {
           保存并重启代理
         </button>
         {message && <span className="muted">{message}</span>}
+      </div>
+      <div className="cert-section">
+        <h3>弱网限速</h3>
+        <div className="form-grid">
+          <label>启用限速</label>
+          <input
+            data-testid="throttle-enabled"
+            type="checkbox"
+            checked={settings.throttle.enabled}
+            onChange={(e) =>
+              setSettings({ ...settings, throttle: { ...settings.throttle, enabled: e.target.checked } })
+            }
+          />
+          <label>预设</label>
+          <select
+            data-testid="throttle-preset"
+            value={settings.throttle.preset}
+            onChange={(e) => applyThrottlePreset(e.target.value as ThrottlePreset)}
+          >
+            {(Object.keys(THROTTLE_PRESET_LABELS) as ThrottlePreset[]).map((p) => (
+              <option key={p} value={p}>
+                {THROTTLE_PRESET_LABELS[p]}
+              </option>
+            ))}
+          </select>
+          <label>下行带宽（KB/s）</label>
+          <input
+            data-testid="throttle-down"
+            type="number"
+            min={1}
+            value={settings.throttle.downKbps}
+            onChange={(e) => patchThrottle({ downKbps: Number(e.target.value) })}
+          />
+          <label>延迟（ms）</label>
+          <input
+            data-testid="throttle-latency"
+            type="number"
+            min={0}
+            value={settings.throttle.latencyMs}
+            onChange={(e) => patchThrottle({ latencyMs: Number(e.target.value) })}
+          />
+          <label>抖动（ms）</label>
+          <input
+            data-testid="throttle-jitter"
+            type="number"
+            min={0}
+            value={settings.throttle.jitterMs}
+            onChange={(e) => patchThrottle({ jitterMs: Number(e.target.value) })}
+          />
+        </div>
+        <div className="toolbar">
+          <button className="primary" data-testid="throttle-save" disabled={saving} onClick={() => saveThrottle(settings.throttle)}>
+            保存限速设置
+          </button>
+          <span className="muted">即时生效，无需重启代理</span>
+        </div>
       </div>
       {certCmds && (
         <div className="cert-section">
