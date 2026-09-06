@@ -7,6 +7,7 @@ import { computeMockResult, type MockComputation } from '../rules/apply-rule';
 import type { RenderContext } from '../rules/template';
 import { resolveMapLocal, sendMapRemote } from '../rules/redirect';
 import { ruleEffective } from '../rules/rule-effective';
+import { applyThrottle } from './throttle';
 import { certDownloadResponse, guidePageResponse, type OnboardingResponse } from './onboarding';
 
 export interface ProxyServerOptions {
@@ -140,6 +141,18 @@ export class ProxyServer {
     // tlsInterceptOnly (CONNECT never reaches this handler in mockttp 4.x).
     await server.forAnyRequest().always().thenPassThrough({
       beforeRequest: (req) => this.handle(req),
+      beforeResponse: async (resp) => {
+        if (!this.opts.getSettings().throttle?.enabled) return;
+        const text = await resp.body.getText();
+        const slept = await applyThrottle(this.opts.getSettings, Buffer.byteLength(text), this.abort?.signal);
+        if (slept > 0) {
+          const ev = this.events.get(resp.id);
+          if (ev) {
+            ev.throttledMs = slept;
+            this.emit(ev);
+          }
+        }
+      },
     });
 
     this.server = server;
@@ -213,6 +226,14 @@ export class ProxyServer {
 
     if (rule.action === 'mapLocal') {
       const res = await resolveMapLocal(rule.target);
+      let localThrottled: number;
+      try {
+        const bytes = res.ok ? res.content.length : Buffer.byteLength(event.responseBody ?? '');
+        localThrottled = await applyThrottle(this.opts.getSettings, bytes, this.abort?.signal);
+      } catch {
+        return { response: 'close' as const };
+      }
+      if (localThrottled > 0) event.throttledMs = localThrottled;
       if (res.ok) {
         event.status = 200;
         event.responseHeaders = { 'content-type': res.mime };
@@ -241,6 +262,13 @@ export class ProxyServer {
       this.emit(event);
       return { response: 'close' as const };
     }
+    let remoteThrottled: number;
+    try {
+      remoteThrottled = await applyThrottle(this.opts.getSettings, Buffer.byteLength(remote.body ?? ''), this.abort?.signal);
+    } catch {
+      return { response: 'close' as const };
+    }
+    if (remoteThrottled > 0) event.throttledMs = remoteThrottled;
     event.status = remote.status;
     event.responseHeaders = remote.headers;
     event.responseBody = remote.body;
@@ -306,6 +334,14 @@ export class ProxyServer {
         response: { statusCode: resolution.statusCode, headers: {}, body: '' },
       };
     }
+
+    let throttledMs: number;
+    try {
+      throttledMs = await applyThrottle(this.opts.getSettings, Buffer.byteLength(result.body), this.abort?.signal);
+    } catch {
+      return { response: 'close' };
+    }
+    if (throttledMs > 0) event.throttledMs = throttledMs;
 
     event.status = result.status;
     event.responseHeaders = result.headers;

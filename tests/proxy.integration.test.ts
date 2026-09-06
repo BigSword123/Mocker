@@ -221,6 +221,54 @@ describe('enhanced mock rule behavior', () => {
   });
 });
 
+describe('Throttle', () => {
+  const throttled = (latencyMs: number): Settings => ({
+    ...DEFAULT_SETTINGS,
+    proxyPort: 0,
+    httpsMode: 'whitelist',
+    whitelist: ['mocked.test'],
+    throttle: { enabled: true, preset: 'custom', downKbps: 100000, latencyMs, jitterMs: 0 },
+  });
+
+  beforeEach(() => {
+    settings = { ...settings, throttle: { ...DEFAULT_SETTINGS.throttle } };
+  });
+
+  it('delays passthrough responses when enabled', async () => {
+    settings = throttled(400);
+    const agent = new ProxyAgent(`http://127.0.0.1:${proxy.port}`);
+    const started = Date.now();
+    const res = await fetch(`http://127.0.0.1:${upstreamPort}/hello`, { dispatcher: agent });
+    expect(res.status).toBe(200);
+    expect(Date.now() - started).toBeGreaterThanOrEqual(350);
+  });
+
+  it('delays mocked responses and records throttledMs on the event', async () => {
+    settings = throttled(400);
+    rules = [rule('http://api.example.test/ping', 'throttled-mock')];
+    const agent = new ProxyAgent(`http://127.0.0.1:${proxy.port}`);
+    const started = Date.now();
+    const res = await fetch('http://api.example.test/ping', { dispatcher: agent });
+    expect(await res.text()).toBe('throttled-mock');
+    expect(Date.now() - started).toBeGreaterThanOrEqual(350);
+    await waitFor(() => events.some((e) => e.mocked && e.throttledMs !== undefined));
+    expect(events.find((e) => e.mocked && e.throttledMs !== undefined)!.throttledMs).toBeGreaterThanOrEqual(300);
+  });
+
+  it('releases a mid-flight request early when throttle is disabled', async () => {
+    settings = throttled(900);
+    const agent = new ProxyAgent(`http://127.0.0.1:${proxy.port}`);
+    const started = Date.now();
+    const pending = fetch(`http://127.0.0.1:${upstreamPort}/hello`, { dispatcher: agent });
+    setTimeout(() => {
+      settings = { ...settings, throttle: { ...settings.throttle, enabled: false } };
+    }, 250);
+    const res = await pending;
+    expect(res.status).toBe(200);
+    expect(Date.now() - started).toBeLessThan(800);
+  });
+});
+
 async function waitFor(cond: () => boolean, timeoutMs = 5000): Promise<void> {
   const start = Date.now();
   while (!cond()) {
