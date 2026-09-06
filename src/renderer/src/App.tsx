@@ -20,7 +20,7 @@ export default function App() {
 
   return (
     <div className="app">
-      <StatusBar />
+      <StatusBar onOpenSettings={() => setTab('settings')} />
       <nav className="tabs">
         <button data-testid="traffic-tab" className={tab === 'traffic' ? 'active' : ''} onClick={() => setTab('traffic')}>流量</button>
         <button data-testid="rules-tab" className={tab === 'rules' ? 'active' : ''} onClick={() => setTab('rules')}>规则</button>

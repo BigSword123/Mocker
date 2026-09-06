@@ -105,6 +105,11 @@ export default function TrafficDetail({ event, onCaptureToRule, onCaptureToMapLo
       {event.error && <div className="text-err">错误：{event.error}</div>}
       {event.mocked && <div className="text-ok">由规则命中（{event.matchedRuleId}）</div>}
       {event.errorTriggered && <div className="text-warn">本次命中网络异常分支</div>}
+      {event.throttledMs !== undefined && (
+        <div className="text-warn" data-testid="throttle-mark">
+          限速 +{event.throttledMs}ms
+        </div>
+      )}
       {event.renderWarnings && event.renderWarnings.length > 0 && (
         <details>
           <summary>模板告警 ({event.renderWarnings.length})</summary>
