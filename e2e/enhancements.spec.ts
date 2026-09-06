@@ -15,7 +15,7 @@ test.afterAll(async () => {
 
 async function openNewRuleModal() {
   await win.locator('nav.tabs').getByRole('button', { name: '规则', exact: true }).click();
-  await win.getByRole('button', { name: '新建规则', exact: true }).click();
+  await win.getByRole('button', { name: '+ 新建规则', exact: true }).first().click();
   await expect(win.locator('.modal h2')).toHaveText('新建规则');
 }
 
