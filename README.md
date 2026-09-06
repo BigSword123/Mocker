@@ -185,6 +185,8 @@ curl -i -x http://127.0.0.1:8888 "http://api.example.com/orders"
 
 见「设备接入」页说明：Android 7+ 用户证书、SSL Pinning、iOS 私有中继、HTTP/3。
 
+另：用 `curl -x` 经代理请求**本机回环地址的上游**可能挂起（mockttp 透传与 curl 的既有兼容问题，与限速无关）；浏览器与编程客户端（fetch/undici）不受影响。
+
 ## 文档
 
 - [规则增强用法（时延/动态数据/网络异常）](docs/guide-enhancements.md)
