@@ -2,11 +2,13 @@
 
 Charles 式本地抓包与 Mock 工具（开发者自用）。
 
-## 功能（Phase 1）
+## 功能
 
 - HTTP/HTTPS 抓包（HTTPS 白名单 MITM / 全量解密可切换）
-- 实时流量列表与请求/响应详情
+- 实时流量列表与请求/响应详情（分面过滤 / 重放 / Copy as cURL / HAR 导入导出）
 - 静态响应 Mock 规则（URL 精确/通配/正则 + method + query + 头 + 请求体包含）
+- 错误模板、网络异常、延迟、动态数据（Faker）、序列响应
+- 重定向（Map Local / Map Remote）与场景分组
 - 根证书管理与手机扫码接入（Android / iOS）
 - 系统代理一键开关（macOS / Windows）
 
@@ -21,6 +23,8 @@ Charles 式本地抓包与 Mock 工具（开发者自用）。
 ### 抓包转规则
 
 在「流量」页选中一条请求，详情区点「转为规则」，即可用该请求的 URL、状态码、`content-type` 与响应体预填一个新建规则窗，改完保存即生效。URL 默认按**精确全 URL（含 query）**匹配；响应体原样拷贝、不截断。
+
+详情区还有「转为 MapLocal」：把选中请求的响应体落盘到 `userData/maplocal/`，再打开预填好的 Map Local 编辑窗（精确 URL + method 匹配，`action` 固定为 mapLocal）。文件名由 `host_path__URL哈希前8位.扩展名` 组成（扩展名按响应 `content-type` 推断），同一条请求重复转换会覆盖同一个文件；想改内容直接改盘上文件即可。
 
 ### 规则匹配要点
 
@@ -120,9 +124,9 @@ curl -i -x http://127.0.0.1:8888 "http://api.example.com/orders"
 「流量」页工具栏与详情区提供四个日常操作：
 
 - **分面过滤**：方法下拉、状态码下拉（2xx–5xx、错误）、域名输入、全文搜索框（URL + 请求/响应头 + 请求/响应体），条件 AND 组合；「清除」一键还原
-- **重放 / 编辑后重发**：详情区「重放」原样重发选中请求；「编辑后重发…」打开弹窗可改方法、URL、请求头与请求体（none / raw / form-data / urlencoded）再发。重放会照常命中 Mock 规则（含延迟 / 异常 / 模板），新条目带「重放」角标，可继续链式重放
+- **重放 / 编辑后重发**：详情区「重放」原样重发选中请求；「编辑后重发…」打开弹窗可改方法、URL、请求头与请求体（none / raw / form-data / urlencoded）再发。重放遵循与代理一致的命中顺序：先匹配重定向（Map Local / Map Remote），再匹配 Mock 规则（含延迟 / 异常 / 模板）；新条目带「重放」角标，可继续链式重放
 - **Copy as cURL**：详情区复制选中请求为 cURL 命令，方言可选 bash / cmd / PowerShell（默认跟随当前系统），hop-by-hop 头自动省略
-- **HAR 导入 / 导出**：「导出 HAR」把当前过滤结果存为 HAR 1.2 文件（保留 mock 标记）；「导入 HAR」加载外部 HAR 文件并替换当前流量列表查看，导入条目带「导入」角标，同样支持转规则
+- **HAR 导入 / 导出**：「导出 HAR」把当前过滤结果存为 HAR 1.2 文件（保留 mock 标记）；「导入 HAR」加载外部 HAR 文件并替换当前流量列表查看，导入条目带「导入」角标，同样支持转规则 / 转 MapLocal
 
 ### 重定向
 
@@ -178,4 +182,5 @@ curl -i -x http://127.0.0.1:8888 "http://api.example.com/orders"
 
 ## 设计文档
 
-`docs/superpowers/specs/2026-09-01-mocker-design.md`
+- 总体设计：`docs/superpowers/specs/2026-09-01-mocker-design.md`
+- 各功能专项设计见 `docs/superpowers/specs/`（规则增强、抓包转规则、流量操作、场景内嵌、规则引擎扩展等）
