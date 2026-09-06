@@ -63,6 +63,8 @@ export interface TrafficEvent {
   origin?: 'capture' | 'replay' | 'imported';
   replayedFromId?: string;
   sequenceIndex?: number;
+  /** 实际施加的限速延迟，仅在 >0ms 时写入，单位 ms */
+  throttledMs?: number;
 }
 
 export interface ReplayRequest {
@@ -87,7 +89,40 @@ export interface Settings {
   httpsMode: HttpsMode;
   whitelist: string[];
   autoStartProxy: boolean;
+  throttle: ThrottleSettings;
 }
+
+export type ThrottlePreset = 'three-g' | 'slow-three-g' | 'dialup' | 'weak-wifi' | 'custom';
+
+export interface ThrottleSettings {
+  enabled: boolean;
+  preset: ThrottlePreset;
+  downKbps: number;
+  latencyMs: number;
+  jitterMs: number;
+}
+
+export const DOWN_KBPS_MAX = 100_000;
+export const LATENCY_MS_MAX = 60_000;
+export const JITTER_MS_MAX = 30_000;
+
+export const THROTTLE_PRESETS: Record<
+  Exclude<ThrottlePreset, 'custom'>,
+  Pick<ThrottleSettings, 'downKbps' | 'latencyMs' | 'jitterMs'>
+> = {
+  'three-g': { downKbps: 200, latencyMs: 300, jitterMs: 100 },
+  'slow-three-g': { downKbps: 50, latencyMs: 800, jitterMs: 300 },
+  dialup: { downKbps: 6, latencyMs: 120, jitterMs: 20 },
+  'weak-wifi': { downKbps: 400, latencyMs: 100, jitterMs: 80 },
+};
+
+export const THROTTLE_PRESET_LABELS: Record<ThrottlePreset, string> = {
+  'three-g': '3G',
+  'slow-three-g': '慢速 3G',
+  dialup: '56K 拨号',
+  'weak-wifi': '弱 WiFi',
+  custom: '自定义',
+};
 
 export const DEFAULT_SETTINGS: Settings = {
   proxyPort: 8888,
@@ -95,6 +130,7 @@ export const DEFAULT_SETTINGS: Settings = {
   httpsMode: 'whitelist',
   whitelist: [],
   autoStartProxy: true,
+  throttle: { enabled: false, preset: 'three-g', ...THROTTLE_PRESETS['three-g'] },
 };
 
 export interface ProxyStatus {
