@@ -1,11 +1,31 @@
 import { QRCodeSVG } from 'qrcode.react';
-import { useEffect, useState } from 'react';
-import type { CertInfo, ProxyStatus } from '../../../shared/types';
+import { useCallback, useEffect, useState } from 'react';
+import type { AdbOpResult, AdbStatus, CertInfo, ProxyStatus } from '../../../shared/types';
 import { api } from '../lib/api';
 
 export default function DeviceGuide() {
   const [status, setStatus] = useState<ProxyStatus | null>(null);
   const [cert, setCert] = useState<CertInfo | null>(null);
+  const [adb, setAdb] = useState<AdbStatus | null>(null);
+  const [adbMsg, setAdbMsg] = useState('');
+  const refreshAdb = useCallback(() => {
+    api.adbStatus().then(setAdb).catch(() => setAdb(null));
+  }, []);
+  useEffect(() => {
+    refreshAdb();
+  }, [refreshAdb]);
+
+  const runAdb = async (fn: () => Promise<AdbOpResult>) => {
+    try {
+      const r = await fn();
+      setAdbMsg(r.message);
+    } catch (err) {
+      setAdbMsg(String(err));
+    }
+    refreshAdb();
+  };
+  const adbReady = !!adb?.adbAvailable && !!adb?.activeSerial;
+  const usbCmds = status ? [`adb reverse tcp:${status.port} tcp:${status.port}`, `adb shell settings put global http_proxy 127.0.0.1:${status.port}`] : [];
 
   useEffect(() => {
     api.proxyStatus().then(setStatus).catch(() => {});
@@ -38,6 +58,45 @@ export default function DeviceGuide() {
           </p>
         </>
       )}
+      <h3>Android USB 直连（不同网段可用）</h3>
+      <p className="muted">
+        手机与电脑不在同一网络（如手机走流量）时，用数据线 + USB 调试把手机流量转到本机代理。HTTPS 抓包仍需手机先按上方流程安装证书。
+      </p>
+      <p>
+        {adb === null && <span className="muted">检测 adb 中…</span>}
+        {adb && !adb.adbAvailable && <span className="text-err">{adb.installHint}</span>}
+        {adb?.adbAvailable && (
+          <>
+            <span className={adb.activeSerial ? 'text-ok' : 'text-err'}>
+              {adb.activeSerial ? `设备 ${adb.activeSerial}` : '无已授权设备（连接数据线并在手机上允许 USB 调试）'}
+            </span>
+            {' · '}
+            <span className={adb.tunnelActive ? 'text-ok' : ''}>隧道{adb.tunnelActive ? '已建立' : '未建立'}</span>
+            {' · '}
+            <span className={adb.phoneProxySet ? 'text-ok' : ''}>手机代理{adb.phoneProxySet ? '已设置' : '未设置'}</span>
+          </>
+        )}
+      </p>
+      <div className="toolbar">
+        <button onClick={refreshAdb}>检测</button>
+        <button data-testid="adb-tunnel" disabled={!adbReady} onClick={() => runAdb(() => api.adbSetupTunnel())}>建立隧道</button>
+        <button data-testid="adb-proxy" disabled={!adbReady} onClick={() => runAdb(() => api.adbSetPhoneProxy())}>设置手机代理</button>
+        <button data-testid="adb-clear" className="primary" disabled={!adbReady} onClick={() => runAdb(() => api.adbClearPhoneProxy())}>一键恢复手机网络</button>
+      </div>
+      {adbMsg && <p className="muted">{adbMsg}</p>}
+      {adb && !adb.adbAvailable && usbCmds.length > 0 && (
+        <div>
+          {usbCmds.map((cmd) => (
+            <CmdRow key={cmd} cmd={cmd} />
+          ))}
+        </div>
+      )}
+      <p className="text-warn">
+        用完或拔线前务必点「一键恢复手机网络」，否则手机全局代理指向已失效端口会直接断网；拔线/重连后隧道失效，重新「建立隧道」即可。
+      </p>
+      <p className="muted">
+        局限：绕过系统代理的应用（部分原生/游戏）与 QUIC（UDP 443）流量抓不到；此方案仅支持 Android。
+      </p>
       <h3>已知限制</h3>
       <ul>
         <li>Android 7+ 应用默认不信任用户证书：仅 debuggable 或显式信任用户 CA 的应用可抓。</li>
@@ -45,6 +104,25 @@ export default function DeviceGuide() {
         <li>iOS 需关闭 iCloud 私有中继。</li>
         <li>HTTP/3 (QUIC) 不走代理，无法抓取。</li>
       </ul>
+    </div>
+  );
+}
+
+function CmdRow({ cmd }: { cmd: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(cmd);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // 剪贴板不可用时静默失败，用户可手动选中复制
+    }
+  };
+  return (
+    <div className="cert-cmd-row">
+      <code>{cmd}</code>
+      <button onClick={copy}>{copied ? '已复制' : '复制'}</button>
     </div>
   );
 }
