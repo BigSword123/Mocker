@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { computeThrottleDelayMs } from '../src/main/proxy/throttle';
 import {
   DEFAULT_SETTINGS,
   DOWN_KBPS_MAX,
@@ -31,5 +32,34 @@ describe('THROTTLE_PRESETS', () => {
   it('default settings ship throttle disabled with a preset', () => {
     expect(DEFAULT_SETTINGS.throttle.enabled).toBe(false);
     expect(DEFAULT_SETTINGS.throttle.preset).toBe('three-g');
+  });
+});
+
+describe('computeThrottleDelayMs', () => {
+  const base = { enabled: true, preset: 'custom' as const, downKbps: 200, latencyMs: 300, jitterMs: 100 };
+
+  it('returns 0 when disabled', () => {
+    expect(computeThrottleDelayMs({ ...base, enabled: false }, 10000)).toBe(0);
+  });
+
+  it('latency minus jitter floors at 0 (rng=0)', () => {
+    // 300 + floor(0*201) - 100 = 200
+    expect(computeThrottleDelayMs(base, 0, () => 0)).toBe(200);
+    // jitter 大于 latency 时下限为 0
+    expect(computeThrottleDelayMs({ ...base, latencyMs: 50, jitterMs: 100 }, 0, () => 0)).toBe(0);
+  });
+
+  it('latency plus jitter at rng upper bound', () => {
+    // floor(0.999*201)=200 → 300 + 200 - 100 = 400
+    expect(computeThrottleDelayMs(base, 0, () => 0.999)).toBe(400);
+  });
+
+  it('transfer time from body bytes', () => {
+    // 2048 bytes @ 2KB/s = 1s，latency/jitter 为 0
+    expect(computeThrottleDelayMs({ ...base, downKbps: 2, latencyMs: 0, jitterMs: 0 }, 2048, () => 0)).toBe(1000);
+  });
+
+  it('caps at DELAY_MS_MAX (300000)', () => {
+    expect(computeThrottleDelayMs({ ...base, downKbps: 1, latencyMs: 0, jitterMs: 0 }, 1e9, () => 0)).toBe(300000);
   });
 });
