@@ -13,6 +13,7 @@ import type { CaMaterial } from './certs/ca';
 import { buildCertInstallCommands } from './certs/install-commands';
 import type { RenderContext, ReplayRequest, RuleAction, RuleInput, RulePatch, Settings, TrafficEvent, MapLocalSaveInput } from '../shared/types';
 import type { OpenDialogOptions, SaveDialogOptions } from 'electron';
+import { AdbService } from './adb/adb-service';
 import { validateAction } from './rules/validate';
 import { assertValidThrottle } from './proxy/throttle';
 import { renderTemplate } from './rules/template';
@@ -92,6 +93,11 @@ export function registerIpc(ctx: IpcContext): void {
     },
   );
 
+  const adb = new AdbService();
+  ipcMain.handle('adb:status', () => adb.status(ctx.settings.get().proxyPort));
+  ipcMain.handle('adb:setup-tunnel', () => adb.setupTunnel(ctx.settings.get().proxyPort));
+  ipcMain.handle('adb:set-phone-proxy', () => adb.setPhoneProxy(ctx.settings.get().proxyPort));
+  ipcMain.handle('adb:clear-phone-proxy', () => adb.clearPhoneProxy());
   ipcMain.handle('settings:get', () => ctx.settings.get());
   ipcMain.handle('settings:set', (_e, patch: Partial<Settings>) => {
     if (patch.proxyPort !== undefined) {

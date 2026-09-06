@@ -1,4 +1,4 @@
-import type { CertInfo, CertInstallCommands, MapLocalSaveInput, MockRule, ProxyStatus, RedirectRule, RenderContext, ReplayRequest, RuleAction, RuleInput, RulePatch, Scenario, Settings, TrafficEvent } from './types';
+import type { AdbOpResult, AdbStatus, CertInfo, CertInstallCommands, MapLocalSaveInput, MockRule, ProxyStatus, RedirectRule, RenderContext, ReplayRequest, RuleAction, RuleInput, RulePatch, Scenario, Settings, TrafficEvent } from './types';
 
 export interface Api {
   proxyStart(): Promise<void>;
@@ -38,6 +38,10 @@ export interface Api {
   rulesResetSequence(ruleId: string): Promise<void>;
   maplocalSave(input: MapLocalSaveInput): Promise<string>;
   openFileDialog(): Promise<string | null>;
+  adbStatus(): Promise<AdbStatus>;
+  adbSetupTunnel(): Promise<AdbOpResult>;
+  adbSetPhoneProxy(): Promise<AdbOpResult>;
+  adbClearPhoneProxy(): Promise<AdbOpResult>;
 }
 
 declare global {

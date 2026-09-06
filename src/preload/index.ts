@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { Api } from '../shared/api';
-import type { RedirectRule, RenderContext, ReplayRequest, RuleAction, RuleInput, RulePatch, Settings, TrafficEvent, MapLocalSaveInput } from '../shared/types';
+import type { AdbOpResult, AdbStatus, RedirectRule, RenderContext, ReplayRequest, RuleAction, RuleInput, RulePatch, Settings, TrafficEvent, MapLocalSaveInput } from '../shared/types';
 
 const api: Api = {
   proxyStart: () => ipcRenderer.invoke('proxy:start'),
@@ -38,6 +38,10 @@ const api: Api = {
   rulesResetSequence: (ruleId) => ipcRenderer.invoke('rules:reset-sequence', ruleId),
   maplocalSave: (input: MapLocalSaveInput) => ipcRenderer.invoke('maplocal:save', input),
   openFileDialog: () => ipcRenderer.invoke('dialog:open-file'),
+  adbStatus: () => ipcRenderer.invoke('adb:status'),
+  adbSetupTunnel: () => ipcRenderer.invoke('adb:setup-tunnel'),
+  adbSetPhoneProxy: () => ipcRenderer.invoke('adb:set-phone-proxy'),
+  adbClearPhoneProxy: () => ipcRenderer.invoke('adb:clear-phone-proxy'),
 };
 
 contextBridge.exposeInMainWorld('api', api);
