@@ -33,7 +33,8 @@ const api: Api = {
   scenariosAdd: (name) => ipcRenderer.invoke('scenarios:add', name),
   scenariosRename: (oldName, newName) => ipcRenderer.invoke('scenarios:rename', oldName, newName),
   scenariosSetEnabled: (name, enabled) => ipcRenderer.invoke('scenarios:set-enabled', name, enabled),
-  scenariosRemove: (name) => ipcRenderer.invoke('scenarios:remove', name),
+  scenariosRemove: (name, moveTo) => ipcRenderer.invoke('scenarios:remove', name, moveTo),
+  scenariosReorder: (names) => ipcRenderer.invoke('scenarios:reorder', names),
   rulesResetSequence: (ruleId) => ipcRenderer.invoke('rules:reset-sequence', ruleId),
   openFileDialog: () => ipcRenderer.invoke('dialog:open-file'),
 };

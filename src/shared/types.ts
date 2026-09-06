@@ -164,6 +164,8 @@ export interface RedirectRule {
 export interface Scenario {
   name: string;
   enabled: boolean;
+  /** 内置场景「默认」：不可删除、不可改名，缺失时启动自动补种 */
+  builtin?: boolean;
 }
 
 export interface RenderContext {

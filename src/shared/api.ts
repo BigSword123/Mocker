@@ -32,7 +32,9 @@ export interface Api {
   scenariosAdd(name: string): Promise<Scenario>;
   scenariosRename(oldName: string, newName: string): Promise<void>;
   scenariosSetEnabled(name: string, enabled: boolean): Promise<void>;
-  scenariosRemove(name: string): Promise<void>;
+  /** moveTo 为目标场景名；null = 条目转为未分组 */
+  scenariosRemove(name: string, moveTo: string | null): Promise<void>;
+  scenariosReorder(names: string[]): Promise<void>;
   rulesResetSequence(ruleId: string): Promise<void>;
   openFileDialog(): Promise<string | null>;
 }
