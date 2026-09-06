@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeThrottleDelayMs } from '../src/main/proxy/throttle';
+import { applyThrottle, computeThrottleDelayMs } from '../src/main/proxy/throttle';
 import {
   DEFAULT_SETTINGS,
   DOWN_KBPS_MAX,
@@ -7,6 +7,7 @@ import {
   LATENCY_MS_MAX,
   THROTTLE_PRESETS,
   THROTTLE_PRESET_LABELS,
+  type Settings,
   type ThrottlePreset,
 } from '../src/shared/types';
 
@@ -62,4 +63,32 @@ describe('computeThrottleDelayMs', () => {
   it('caps at DELAY_MS_MAX (300000)', () => {
     expect(computeThrottleDelayMs({ ...base, downKbps: 1, latencyMs: 0, jitterMs: 0 }, 1e9, () => 0)).toBe(300000);
   });
+});
+
+describe('applyThrottle', () => {
+  it('sleeps at least the computed latency', async () => {
+    const settings: Settings = { ...DEFAULT_SETTINGS, throttle: { enabled: true, preset: 'custom', downKbps: 100000, latencyMs: 300, jitterMs: 0 } };
+    const started = Date.now();
+    await applyThrottle(() => settings, 0);
+    expect(Date.now() - started).toBeGreaterThanOrEqual(280);
+  }, 10000);
+
+  it('releases early when throttle is disabled mid-flight', async () => {
+    let settings: Settings = { ...DEFAULT_SETTINGS, throttle: { enabled: true, preset: 'custom', downKbps: 100000, latencyMs: 900, jitterMs: 0 } };
+    const get = () => settings;
+    const started = Date.now();
+    const p = applyThrottle(get, 0);
+    setTimeout(() => {
+      settings = { ...settings, throttle: { ...settings.throttle, enabled: false } };
+    }, 250);
+    await p;
+    expect(Date.now() - started).toBeLessThan(650);
+  }, 10000);
+
+  it('rejects with AbortError when signal fires', async () => {
+    const settings: Settings = { ...DEFAULT_SETTINGS, throttle: { enabled: true, preset: 'custom', downKbps: 100000, latencyMs: 5000, jitterMs: 0 } };
+    const ac = new AbortController();
+    setTimeout(() => ac.abort(), 100);
+    await expect(applyThrottle(() => settings, 0, ac.signal)).rejects.toThrow(/abort/i);
+  }, 10000);
 });
