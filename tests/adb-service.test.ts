@@ -81,7 +81,7 @@ describe('AdbService', () => {
       if (args[0] === 'version') return 'Android Debug Bridge version 1.0.41';
       if (args[0] === 'devices') return DEVICES_OUTPUT;
       if (args[0] === 'reverse') return 'ABC123 tcp:8888 tcp:8888\n';
-      if (args[0] === 'shell') return '127.0.0.1:8888\n';
+      if (args.includes('shell')) return '127.0.0.1:8888\n';
       return '';
     }).status(8888);
     expect(st.adbAvailable).toBe(true);

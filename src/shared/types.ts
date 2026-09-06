@@ -221,3 +221,22 @@ export interface RenderContext {
 }
 
 export const DELAY_MS_MAX = 300_000;
+
+export interface AdbDevice {
+  serial: string;
+  state: string;
+}
+
+export interface AdbStatus {
+  adbAvailable: boolean;
+  installHint?: string;
+  devices: AdbDevice[];
+  activeSerial?: string;
+  tunnelActive: boolean;
+  phoneProxySet: boolean;
+}
+
+export interface AdbOpResult {
+  ok: boolean;
+  message: string;
+}
