@@ -6,6 +6,7 @@ import { registerIpc } from './ipc';
 import { ProxyServer } from './proxy/proxy-server';
 import { ReplayService } from './replay/replay';
 import { HistoryWriter } from './storage/history';
+import { MapLocalStore } from './storage/maplocal-store';
 import { RedirectsStore } from './storage/redirects-store';
 import { RulesStore } from './storage/rules-store';
 import { ScenariosStore } from './storage/scenarios-store';
@@ -62,6 +63,7 @@ async function bootstrap(): Promise<void> {
 
   const redirects = new RedirectsStore(dataDir);
   const scenarios = new ScenariosStore(dataDir);
+  const maplocal = new MapLocalStore(join(dataDir, 'maplocal'));
   await redirects.load();
   await scenarios.load();
 
@@ -78,12 +80,18 @@ async function bootstrap(): Promise<void> {
     onEvent,
   });
 
-  const replay = new ReplayService({ getRules: () => rules.list(), onEvent });
+  const replay = new ReplayService({
+    getRules: () => rules.list(),
+    getRedirects: () => redirects.list(),
+    getScenarios: scenariosMap,
+    onEvent,
+  });
 
   registerIpc({
     proxy,
     rules,
     redirects,
+    maplocal,
     scenarios,
     settings,
     ca,

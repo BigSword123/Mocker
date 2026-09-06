@@ -1,4 +1,4 @@
-import type { CertInfo, CertInstallCommands, MockRule, ProxyStatus, RedirectRule, RenderContext, ReplayRequest, RuleAction, RuleInput, RulePatch, Scenario, Settings, TrafficEvent } from './types';
+import type { CertInfo, CertInstallCommands, MapLocalSaveInput, MockRule, ProxyStatus, RedirectRule, RenderContext, ReplayRequest, RuleAction, RuleInput, RulePatch, Scenario, Settings, TrafficEvent } from './types';
 
 export interface Api {
   proxyStart(): Promise<void>;
@@ -36,6 +36,7 @@ export interface Api {
   scenariosRemove(name: string, moveTo: string | null): Promise<void>;
   scenariosReorder(names: string[]): Promise<void>;
   rulesResetSequence(ruleId: string): Promise<void>;
+  maplocalSave(input: MapLocalSaveInput): Promise<string>;
   openFileDialog(): Promise<string | null>;
 }
 

@@ -34,11 +34,12 @@ function HeaderTable({ headers }: { headers?: Record<string, string> }) {
 interface Props {
   event: TrafficEvent | null;
   onCaptureToRule?: (event: TrafficEvent) => void;
+  onCaptureToMapLocal?: (event: TrafficEvent) => void;
   onReplay?: (event: TrafficEvent) => void;
   onCompose?: (event: TrafficEvent) => void;
 }
 
-export default function TrafficDetail({ event, onCaptureToRule, onReplay, onCompose }: Props) {
+export default function TrafficDetail({ event, onCaptureToRule, onCaptureToMapLocal, onReplay, onCompose }: Props) {
   const [dialect, setDialect] = useState<CurlDialect>('bash');
   const [copied, setCopied] = useState(false);
 
@@ -70,6 +71,11 @@ export default function TrafficDetail({ event, onCaptureToRule, onReplay, onComp
         {onCaptureToRule && (
           <button data-testid="capture-to-rule" onClick={() => onCaptureToRule(event)}>
             转为规则
+          </button>
+        )}
+        {onCaptureToMapLocal && (
+          <button data-testid="capture-to-maplocal" onClick={() => onCaptureToMapLocal(event)}>
+            转为 MapLocal
           </button>
         )}
         {onReplay && (

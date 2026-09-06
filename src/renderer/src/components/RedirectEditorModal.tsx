@@ -6,8 +6,12 @@ import ScenarioField from './ScenarioField';
 
 type ActionKind = 'mapLocal' | 'mapRemote';
 
+type RedirectInput = Omit<RedirectRule, 'id' | 'priority'>;
+
 interface Props {
   initial: RedirectRule | null;
+  /** 新建时由抓包转 mapLocal 预填 */
+  draft?: RedirectInput;
   /** 新建时预挂的场景 */
   presetScenario?: string;
   onClose: () => void;
@@ -22,8 +26,9 @@ const URL_TYPES: Array<{ value: RuleMatch['urlType']; label: string }> = [
 const METHODS: HttpMethod[] = ['ANY', 'GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'];
 const EMPTY_ROW: HeaderRow = { enabled: true, name: '', value: '', description: '' };
 
-export default function RedirectEditorModal({ initial, presetScenario, onClose, onSaved }: Props) {
-  const seed = initial;
+export default function RedirectEditorModal({ initial, draft, presetScenario, onClose, onSaved }: Props) {
+  // initial（编辑现有规则）优先；新建时可由 draft（抓包转 mapLocal）预填。两者不会同时出现。
+  const seed: RedirectRule | RedirectInput | null = initial ?? draft ?? null;
   const [name, setName] = useState(seed?.name ?? '');
   const [enabled, setEnabled] = useState(seed?.enabled ?? true);
   const [urlType, setUrlType] = useState<RuleMatch['urlType']>(seed?.match.urlType ?? 'exact');
@@ -53,8 +58,8 @@ export default function RedirectEditorModal({ initial, presetScenario, onClose, 
     for (const r of headers) if (r.enabled && r.name.trim()) headersObj[r.name.trim()] = r.value;
     const match: RuleMatch = { urlType, urlPattern, method, headers: headersObj };
     try {
-      if (seed) {
-        await api.redirectsUpdate(seed.id, { name, enabled, match, action: actionKind, target, scenario });
+      if (initial) {
+        await api.redirectsUpdate(initial.id, { name, enabled, match, action: actionKind, target, scenario });
       } else {
         await api.redirectsAdd({ name, enabled, match, action: actionKind, target, scenario });
       }
@@ -67,7 +72,7 @@ export default function RedirectEditorModal({ initial, presetScenario, onClose, 
   return (
     <div className="modal-mask" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h2>{seed ? '编辑重定向' : '新建重定向'}</h2>
+        <h2>{initial ? '编辑重定向' : '新建重定向'}</h2>
         <div className="form-grid">
           <label>名称</label>
           <input data-testid="redirect-name" value={name} onChange={(e) => setName(e.target.value)} />

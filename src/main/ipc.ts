@@ -3,6 +3,7 @@ import * as fs from 'node:fs';
 import { networkInterfaces } from 'node:os';
 import type { ProxyServer } from './proxy/proxy-server';
 import type { HistoryWriter } from './storage/history';
+import type { MapLocalStore } from './storage/maplocal-store';
 import type { RedirectsStore } from './storage/redirects-store';
 import type { RulesStore } from './storage/rules-store';
 import type { ScenariosStore } from './storage/scenarios-store';
@@ -10,7 +11,7 @@ import type { SettingsStore } from './storage/settings-store';
 import { disableSystemProxy, enableSystemProxy, systemProxyEnabled } from './system-proxy';
 import type { CaMaterial } from './certs/ca';
 import { buildCertInstallCommands } from './certs/install-commands';
-import type { RenderContext, ReplayRequest, RuleAction, RuleInput, RulePatch, Settings, TrafficEvent } from '../shared/types';
+import type { RenderContext, ReplayRequest, RuleAction, RuleInput, RulePatch, Settings, TrafficEvent, MapLocalSaveInput } from '../shared/types';
 import type { OpenDialogOptions, SaveDialogOptions } from 'electron';
 import { validateAction } from './rules/validate';
 import { renderTemplate } from './rules/template';
@@ -21,6 +22,7 @@ export interface IpcContext {
   proxy: ProxyServer;
   rules: RulesStore;
   redirects: RedirectsStore;
+  maplocal: MapLocalStore;
   scenarios: ScenariosStore;
   settings: SettingsStore;
   ca: CaMaterial;
@@ -153,6 +155,8 @@ export function registerIpc(ctx: IpcContext): void {
   ipcMain.handle('redirects:add', (_e, input) => ctx.redirects.add(input));
   ipcMain.handle('redirects:update', (_e, id: string, patch) => ctx.redirects.update(id, patch));
   ipcMain.handle('redirects:remove', (_e, id: string) => ctx.redirects.remove(id));
+
+  ipcMain.handle('maplocal:save', (_e, input: MapLocalSaveInput) => ctx.maplocal.saveFromCapture(input));
 
   ipcMain.handle('scenarios:list', () => ctx.scenarios.list());
   ipcMain.handle('scenarios:add', (_e, name: string) => ctx.scenarios.add(name));

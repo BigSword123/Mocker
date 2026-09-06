@@ -1,7 +1,10 @@
 import { createServer, type Server } from 'node:http';
+import { mkdtemp, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import * as path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ReplayService } from '../src/main/replay/replay';
-import type { MockRule, TrafficEvent } from '../src/shared/types';
+import type { MockRule, RedirectRule, Scenario, TrafficEvent } from '../src/shared/types';
 
 let server: Server;
 let port: number;
@@ -27,9 +30,32 @@ beforeAll(async () => {
 
 afterAll(() => new Promise<void>((r) => server.close(() => r())));
 
-function service(rules: MockRule[] = []): { svc: ReplayService; events: TrafficEvent[] } {
+function service(
+  rules: MockRule[] = [],
+  redirects: RedirectRule[] = [],
+  scenarios: Array<[string, Scenario]> = [],
+): { svc: ReplayService; events: TrafficEvent[] } {
   const events: TrafficEvent[] = [];
-  return { svc: new ReplayService({ getRules: () => rules, onEvent: (e) => events.push(e) }), events };
+  return {
+    svc: new ReplayService({
+      getRules: () => rules,
+      getRedirects: () => redirects,
+      getScenarios: () => new Map(scenarios),
+      onEvent: (e) => events.push(e),
+    }),
+    events,
+  };
+}
+
+function mockRule(url: string): MockRule {
+  return {
+    id: 'r1',
+    name: 'mock',
+    enabled: true,
+    priority: 0,
+    match: { urlType: 'exact', urlPattern: url, method: 'ANY' },
+    action: { status: 418, headers: { 'x-mock': 'yes' }, body: 'mocked-body' },
+  };
 }
 
 describe('sendReplay passthrough', () => {
@@ -71,17 +97,6 @@ describe('sendReplay passthrough', () => {
 });
 
 describe('sendReplay with rules', () => {
-  function mockRule(url: string): MockRule {
-    return {
-      id: 'r1',
-      name: 'mock',
-      enabled: true,
-      priority: 0,
-      match: { urlType: 'exact', urlPattern: url, method: 'ANY' },
-      action: { status: 418, headers: { 'x-mock': 'yes' }, body: 'mocked-body' },
-    };
-  }
-
   it('returns the mock without touching the network', async () => {
     const before = calls;
     const { svc, events } = service([mockRule(`http://127.0.0.1:${port}/mocked`)]);
@@ -142,5 +157,83 @@ describe('sendReplay with rules', () => {
     expect(e.errorTriggered).toBe(true);
     expect(e.error).toBe('network-error:ECONNRESET');
     expect(e.status).toBeUndefined();
+  });
+});
+
+describe('sendReplay with redirects', () => {
+  let localFile: string;
+
+  beforeAll(async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'mocker-replay-maplocal-'));
+    localFile = path.join(dir, 'body.json');
+    await writeFile(localFile, '{"from":"local-file"}', 'utf8');
+  });
+
+  function redirect(over: Partial<RedirectRule> = {}): RedirectRule {
+    return {
+      id: 'red1',
+      name: 'red',
+      enabled: true,
+      priority: 0,
+      match: { urlType: 'exact', urlPattern: `http://127.0.0.1:${port}/red`, method: 'ANY' },
+      action: 'mapLocal',
+      target: localFile,
+      ...over,
+    };
+  }
+
+  it('mapLocal short-circuits ahead of mock rules', async () => {
+    const before = calls;
+    const { svc, events } = service([mockRule(`http://127.0.0.1:${port}/red`)], [redirect()]);
+
+    await svc.send({ method: 'GET', url: `http://127.0.0.1:${port}/red`, headers: {}, body: '' });
+
+    expect(calls).toBe(before);
+    const e = events[0]!;
+    expect(e.mocked).toBe(true);
+    expect(e.matchedRuleId).toBe('red1');
+    expect(e.status).toBe(200);
+    expect(e.responseBody).toBe('{"from":"local-file"}');
+  });
+
+  it('disabled redirect falls through to mock rules', async () => {
+    const { svc, events } = service(
+      [mockRule(`http://127.0.0.1:${port}/red`)],
+      [redirect({ enabled: false })],
+    );
+    await svc.send({ method: 'GET', url: `http://127.0.0.1:${port}/red`, headers: {}, body: '' });
+    expect(events[0]!.matchedRuleId).toBe('r1');
+  });
+
+  it('redirect in a disabled scenario falls through to mock rules', async () => {
+    const { svc, events } = service(
+      [mockRule(`http://127.0.0.1:${port}/red`)],
+      [redirect({ scenario: 'off' })],
+      [['off', { name: 'off', enabled: false }]],
+    );
+    await svc.send({ method: 'GET', url: `http://127.0.0.1:${port}/red`, headers: {}, body: '' });
+    expect(events[0]!.matchedRuleId).toBe('r1');
+  });
+
+  it('mapRemote forwards to the target host keeping the path', async () => {
+    const before = calls;
+    const sentUrl = 'http://origin.example.test/red?x=1';
+    const rule = redirect({
+      id: 'red2',
+      action: 'mapRemote',
+      target: `127.0.0.1:${port}`,
+      match: { urlType: 'exact', urlPattern: sentUrl, method: 'ANY' },
+    });
+    const { svc, events } = service([], [rule]);
+
+    await svc.send({ method: 'GET', url: sentUrl, headers: {}, body: '' });
+
+    expect(calls).toBe(before + 1);
+    expect(seen.path).toBe('/red?x=1');
+    const e = events[0]!;
+    expect(e.mocked).toBe(true);
+    expect(e.matchedRuleId).toBe('red2');
+    expect(e.status).toBe(200);
+    expect(e.responseBody).toBe('{"upstream":true}');
   });
 });

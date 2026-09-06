@@ -161,6 +161,12 @@ export interface RedirectRule {
   target: string;
 }
 
+export interface MapLocalSaveInput {
+  url: string;
+  responseHeaders?: Record<string, string>;
+  responseBody?: string;
+}
+
 export interface Scenario {
   name: string;
   enabled: boolean;

@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { Api } from '../shared/api';
-import type { RedirectRule, RenderContext, ReplayRequest, RuleAction, RuleInput, RulePatch, Settings, TrafficEvent } from '../shared/types';
+import type { RedirectRule, RenderContext, ReplayRequest, RuleAction, RuleInput, RulePatch, Settings, TrafficEvent, MapLocalSaveInput } from '../shared/types';
 
 const api: Api = {
   proxyStart: () => ipcRenderer.invoke('proxy:start'),
@@ -36,6 +36,7 @@ const api: Api = {
   scenariosRemove: (name, moveTo) => ipcRenderer.invoke('scenarios:remove', name, moveTo),
   scenariosReorder: (names) => ipcRenderer.invoke('scenarios:reorder', names),
   rulesResetSequence: (ruleId) => ipcRenderer.invoke('rules:reset-sequence', ruleId),
+  maplocalSave: (input: MapLocalSaveInput) => ipcRenderer.invoke('maplocal:save', input),
   openFileDialog: () => ipcRenderer.invoke('dialog:open-file'),
 };
 

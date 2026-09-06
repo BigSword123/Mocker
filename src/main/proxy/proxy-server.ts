@@ -1,8 +1,8 @@
 import * as os from 'node:os';
 import * as mockttp from 'mockttp';
 import type { MockRule, RedirectRule, Scenario, Settings, TrafficEvent } from '../../shared/types';
-import { findMatchingRule } from '../rules/engine';
-import { matchRule, type RequestDescription } from '../rules/matcher';
+import { findMatchingRedirect, findMatchingRule } from '../rules/engine';
+import { type RequestDescription } from '../rules/matcher';
 import { computeMockResult, type MockComputation } from '../rules/apply-rule';
 import type { RenderContext } from '../rules/template';
 import { resolveMapLocal, sendMapRemote } from '../rules/redirect';
@@ -182,7 +182,7 @@ export class ProxyServer {
     const scenarios = this.opts.getScenarios?.() ?? new Map<string, Scenario>();
     const description = describeRequest(req, bodyText);
 
-    const redirectMatched = this.findRedirect(this.redirects(), scenarios, description);
+    const redirectMatched = findMatchingRedirect(this.redirects(), scenarios, description);
     if (redirectMatched) {
       return await this.handleRedirect(redirectMatched, description, event, bodyText);
     }
@@ -195,21 +195,6 @@ export class ProxyServer {
       return await this.handleMatched(matched, req, event, bodyText);
     }
 
-    return undefined;
-  }
-
-  private findRedirect(
-    redirects: RedirectRule[],
-    scenarios: ReadonlyMap<string, Scenario>,
-    description: RequestDescription,
-  ): RedirectRule | undefined {
-    if (redirects.length === 0) return undefined;
-    const sorted = [...redirects]
-      .filter((r) => ruleEffective(r, scenarios))
-      .sort((a, b) => a.priority - b.priority);
-    for (const r of sorted) {
-      if (matchRule(r.match, description)) return r;
-    }
     return undefined;
   }
 

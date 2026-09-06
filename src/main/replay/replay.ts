@@ -1,15 +1,18 @@
 import { randomUUID } from 'node:crypto';
 import * as http from 'node:http';
 import * as https from 'node:https';
-import type { MockRule, RenderContext, ReplayRequest, TrafficEvent } from '../../shared/types';
+import type { MockRule, RedirectRule, RenderContext, ReplayRequest, Scenario, TrafficEvent } from '../../shared/types';
 import { computeMockResult } from '../rules/apply-rule';
-import { findMatchingRule } from '../rules/engine';
+import { findMatchingRedirect, findMatchingRule } from '../rules/engine';
 import type { RequestDescription } from '../rules/matcher';
+import { resolveMapLocal, sendMapRemote } from '../rules/redirect';
 
 export const REPLAY_TIMEOUT_MS = 30_000;
 
 export interface ReplayDeps {
   getRules: () => MockRule[];
+  getRedirects?: () => RedirectRule[];
+  getScenarios?: () => Map<string, Scenario>;
   onEvent: (event: TrafficEvent) => void;
 }
 
@@ -48,6 +51,16 @@ async function sendReplay(
     ...(replayedFromId !== undefined ? { replayedFromId } : {}),
   };
 
+  const redirect = findMatchingRedirect(
+    deps.getRedirects?.() ?? [],
+    deps.getScenarios?.() ?? new Map<string, Scenario>(),
+    description,
+  );
+  if (redirect) {
+    await applyRedirect(deps, event, redirect, description);
+    return id;
+  }
+
   const matched = findMatchingRule(deps.getRules(), description);
   if (matched) {
     await applyMock(deps, event, matched, description, url.host);
@@ -55,6 +68,41 @@ async function sendReplay(
     await sendUpstream(deps, event, input, url);
   }
   return id;
+}
+
+async function applyRedirect(
+  deps: ReplayDeps,
+  event: TrafficEvent,
+  rule: RedirectRule,
+  description: RequestDescription,
+): Promise<void> {
+  event.mocked = true;
+  event.matchedRuleId = rule.id;
+
+  if (rule.action === 'mapLocal') {
+    const res = await resolveMapLocal(rule.target);
+    if (res.ok) {
+      event.status = 200;
+      event.responseHeaders = { 'content-type': res.mime };
+      event.responseBody = res.content.toString('utf8');
+    } else {
+      event.status = 404;
+      event.responseHeaders = { 'content-type': 'text/plain; charset=utf-8' };
+      event.responseBody = `File not found: ${rule.target}`;
+      event.error = `map-local: ${res.reason}`;
+    }
+  } else {
+    const remote = await sendMapRemote(rule.target, description);
+    if (remote.error !== undefined) {
+      event.error = remote.error;
+    } else {
+      event.status = remote.status;
+      event.responseHeaders = remote.headers;
+      event.responseBody = remote.body;
+    }
+  }
+  event.completedAt = Date.now();
+  deps.onEvent(event);
 }
 
 async function applyMock(

@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { RuleInput, TrafficEvent } from '../../../shared/types';
+import type { RedirectRule, RuleInput, TrafficEvent } from '../../../shared/types';
 import { api } from '../lib/api';
+import { captureToRedirectDraft } from '../lib/capture-to-maplocal';
 import { captureToRuleInput } from '../lib/capture-to-rule';
 import { EMPTY_FILTER, matchesFilter } from '../lib/traffic-filter';
 import { useTrafficStore } from '../stores/traffic';
 import ComposeModal from './ComposeModal';
+import RedirectEditorModal from './RedirectEditorModal';
 import RuleEditorModal from './RuleEditorModal';
 import TrafficDetail from './TrafficDetail';
 import TrafficTable from './TrafficTable';
@@ -15,6 +17,7 @@ export default function TrafficPanel() {
   const { list, filter, paused, setFilter, togglePause, clear, setEvents } = useTrafficStore();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draft, setDraft] = useState<RuleInput | null>(null);
+  const [redirectDraft, setRedirectDraft] = useState<Omit<RedirectRule, 'id' | 'priority'> | null>(null);
   const [composeSeed, setComposeSeed] = useState<TrafficEvent | null>(null);
   const [textDraft, setTextDraft] = useState('');
   const [actionError, setActionError] = useState('');
@@ -39,6 +42,20 @@ export default function TrafficPanel() {
         event.id,
       );
       setSelectedId(id);
+    } catch (err) {
+      setActionError(String(err));
+    }
+  };
+
+  const captureToMapLocal = async (event: TrafficEvent) => {
+    setActionError('');
+    try {
+      const target = await api.maplocalSave({
+        url: event.url,
+        responseHeaders: event.responseHeaders,
+        responseBody: event.responseBody,
+      });
+      setRedirectDraft(captureToRedirectDraft(event, target));
     } catch (err) {
       setActionError(String(err));
     }
@@ -126,6 +143,7 @@ export default function TrafficPanel() {
         <TrafficDetail
           event={selected}
           onCaptureToRule={(e) => setDraft(captureToRuleInput(e))}
+          onCaptureToMapLocal={captureToMapLocal}
           onReplay={replay}
           onCompose={(e) => setComposeSeed(e)}
         />
@@ -136,6 +154,14 @@ export default function TrafficPanel() {
           draft={draft}
           onClose={() => setDraft(null)}
           onSaved={() => setDraft(null)}
+        />
+      )}
+      {redirectDraft && (
+        <RedirectEditorModal
+          initial={null}
+          draft={redirectDraft}
+          onClose={() => setRedirectDraft(null)}
+          onSaved={() => setRedirectDraft(null)}
         />
       )}
       {composeSeed && (
