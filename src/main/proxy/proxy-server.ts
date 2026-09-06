@@ -144,7 +144,7 @@ export class ProxyServer {
       beforeResponse: async (resp) => {
         if (!this.opts.getSettings().throttle?.enabled) return;
         const text = await resp.body.getText();
-        const slept = await applyThrottle(this.opts.getSettings, Buffer.byteLength(text), this.abort?.signal);
+        const slept = await applyThrottle(this.opts.getSettings, Buffer.byteLength(text ?? ''), this.abort?.signal);
         if (slept > 0) {
           const ev = this.events.get(resp.id);
           if (ev) {
