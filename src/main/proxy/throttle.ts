@@ -1,5 +1,19 @@
-import { DELAY_MS_MAX, type Settings, type ThrottleSettings } from '../../shared/types';
+import { DELAY_MS_MAX, DOWN_KBPS_MAX, JITTER_MS_MAX, LATENCY_MS_MAX, THROTTLE_PRESET_LABELS, type Settings, type ThrottleSettings } from '../../shared/types';
 import { sleep } from '../util/sleep';
+
+export function assertValidThrottle(t: ThrottleSettings): void {
+  if (typeof t.enabled !== 'boolean') throw new Error('限速开关必须是布尔值');
+  if (!(t.preset in THROTTLE_PRESET_LABELS)) throw new Error('限速预设非法');
+  if (!Number.isInteger(t.downKbps) || t.downKbps < 1 || t.downKbps > DOWN_KBPS_MAX) {
+    throw new Error(`下行带宽必须是 1-${DOWN_KBPS_MAX} 的整数`);
+  }
+  if (!Number.isInteger(t.latencyMs) || t.latencyMs < 0 || t.latencyMs > LATENCY_MS_MAX) {
+    throw new Error(`延迟必须是 0-${LATENCY_MS_MAX} 的整数`);
+  }
+  if (!Number.isInteger(t.jitterMs) || t.jitterMs < 0 || t.jitterMs > JITTER_MS_MAX) {
+    throw new Error(`抖动必须是 0-${JITTER_MS_MAX} 的整数`);
+  }
+}
 
 export function computeThrottleDelayMs(
   t: ThrottleSettings,

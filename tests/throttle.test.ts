@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyThrottle, computeThrottleDelayMs } from '../src/main/proxy/throttle';
+import { applyThrottle, assertValidThrottle, computeThrottleDelayMs } from '../src/main/proxy/throttle';
 import {
   DEFAULT_SETTINGS,
   DOWN_KBPS_MAX,
@@ -91,4 +91,26 @@ describe('applyThrottle', () => {
     setTimeout(() => ac.abort(), 100);
     await expect(applyThrottle(() => settings, 0, ac.signal)).rejects.toThrow(/abort/i);
   }, 10000);
+});
+
+describe('assertValidThrottle', () => {
+  const base = { enabled: true, preset: 'custom' as const, downKbps: 100, latencyMs: 100, jitterMs: 0 };
+
+  it('accepts a valid throttle', () => {
+    expect(() => assertValidThrottle(base)).not.toThrow();
+  });
+
+  it('rejects out-of-range numbers', () => {
+    expect(() => assertValidThrottle({ ...base, downKbps: 0 })).toThrow();
+    expect(() => assertValidThrottle({ ...base, downKbps: 100001 })).toThrow();
+    expect(() => assertValidThrottle({ ...base, latencyMs: -1 })).toThrow();
+    expect(() => assertValidThrottle({ ...base, latencyMs: 60001 })).toThrow();
+    expect(() => assertValidThrottle({ ...base, jitterMs: 30001 })).toThrow();
+  });
+
+  it('rejects non-integers, bad enum and bad enabled', () => {
+    expect(() => assertValidThrottle({ ...base, downKbps: 1.5 })).toThrow();
+    expect(() => assertValidThrottle({ ...base, preset: '5g' as never })).toThrow();
+    expect(() => assertValidThrottle({ ...base, enabled: 'yes' as never })).toThrow();
+  });
 });

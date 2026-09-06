@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -41,5 +41,14 @@ describe('SettingsStore', () => {
     await store2.load();
     expect(store2.get().proxyPort).toBe(9999);
     expect(store2.get().wsPort).toBe(DEFAULT_SETTINGS.wsPort);
+  });
+
+  it('fills missing throttle field with defaults for legacy settings.json', async () => {
+    await writeFile(join(dir, 'settings.json'), JSON.stringify({ proxyPort: 9999 }), 'utf8');
+    const store = new SettingsStore(dir);
+    await store.load();
+    const s = store.get();
+    expect(s.proxyPort).toBe(9999);
+    expect(s.throttle).toEqual(DEFAULT_SETTINGS.throttle);
   });
 });

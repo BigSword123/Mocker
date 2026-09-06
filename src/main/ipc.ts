@@ -14,6 +14,7 @@ import { buildCertInstallCommands } from './certs/install-commands';
 import type { RenderContext, ReplayRequest, RuleAction, RuleInput, RulePatch, Settings, TrafficEvent, MapLocalSaveInput } from '../shared/types';
 import type { OpenDialogOptions, SaveDialogOptions } from 'electron';
 import { validateAction } from './rules/validate';
+import { assertValidThrottle } from './proxy/throttle';
 import { renderTemplate } from './rules/template';
 import { fromHar, toHar } from '../shared/har';
 import type { ReplayService } from './replay/replay';
@@ -98,6 +99,7 @@ export function registerIpc(ctx: IpcContext): void {
         throw new Error('代理端口必须是 1-65535 的整数');
       }
     }
+    if (patch.throttle !== undefined) assertValidThrottle(patch.throttle);
     return ctx.settings.set(patch);
   });
 
