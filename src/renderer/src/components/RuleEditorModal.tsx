@@ -76,11 +76,13 @@ function queryToRows(query: Record<string, string> | HeaderRow[] | undefined): H
 interface Props {
   initial: MockRule | null;
   draft?: RuleInput;
+  /** 新建（无 initial/draft）时预挂的场景 */
+  presetScenario?: string;
   onClose: () => void;
   onSaved: () => void;
 }
 
-export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Props) {
+export default function RuleEditorModal({ initial, draft, presetScenario, onClose, onSaved }: Props) {
   // initial（編集现有规则）优先；新建时可由 draft（抓包转规则）预填。两者不会同时出现。
   const seed = initial ?? draft ?? null;
   const [name, setName] = useState(seed?.name ?? '');
@@ -138,7 +140,7 @@ export default function RuleEditorModal({ initial, draft, onClose, onSaved }: Pr
   const [seqResponses, setSeqResponses] = useState<SequentialResponse[]>(
     seed && 'responses' in seed.action ? seed.action.responses : [{ status: 200, headers: {}, body: '' }],
   );
-  const [scenario, setScenario] = useState<string | undefined>(seed?.scenario);
+  const [scenario, setScenario] = useState<string | undefined>(seed?.scenario ?? presetScenario);
 
   const patchSeq = (idx: number, patch: Partial<SequentialResponse>) => {
     setSeqResponses((prev) => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
