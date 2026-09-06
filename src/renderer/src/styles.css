@@ -517,3 +517,9 @@ table.kv .k { color: #8ab4ff; width: 200px; }
 .scenario-create { display: inline-flex; gap: 8px; align-items: center; }
 .scenario-confirm { display: inline-flex; gap: 8px; align-items: center; }
 .rules-table .ops select { max-width: 110px; }
+.scenario-head .collapse-btn {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  line-height: 1;
+}

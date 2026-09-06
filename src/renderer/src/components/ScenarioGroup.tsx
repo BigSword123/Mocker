@@ -20,6 +20,10 @@ interface Props {
   moveTargets: MoveTarget[];
   /** 未分组不可作为排序拖拽源 */
   draggableScenario: boolean;
+  /** 提供时组头显示 ↑↓ 顺序交换按钮 */
+  onMoveOrder?: (dir: -1 | 1) => void;
+  canMoveUp?: boolean;
+  canMoveDown?: boolean;
   onToggle?: (enabled: boolean) => void;
   onRename?: (newName: string) => void;
   onDelete?: (moveTo: string | null) => void;
@@ -30,8 +34,10 @@ interface Props {
 
 export default function ScenarioGroup({
   testId, name, scenario, builtin, enabled, count, createLabel, moveTargets,
-  draggableScenario, onToggle, onRename, onDelete, onCreateItem, onDropPayload, children,
+  draggableScenario, onMoveOrder, canMoveUp, canMoveDown,
+  onToggle, onRename, onDelete, onCreateItem, onDropPayload, children,
 }: Props) {
+  const [collapsed, setCollapsed] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
   const [confirming, setConfirming] = useState(false);
@@ -84,6 +90,13 @@ export default function ScenarioGroup({
           e.dataTransfer.effectAllowed = 'move';
         }}
       >
+        <button
+          type="button"
+          className="collapse-btn"
+          data-testid={`${testId}-collapse`}
+          aria-label={`${collapsed ? '展开' : '收起'} ${name}`}
+          onClick={() => setCollapsed((c) => !c)}
+        >{collapsed ? '▸' : '▾'}</button>
         <span className="drag-handle" aria-hidden="true">⠿</span>
         {enabled !== null && (
           <input
@@ -113,6 +126,24 @@ export default function ScenarioGroup({
           <span className="scenario-name" data-testid={`${testId}-name`} title={name}>{name}</span>
         )}
         <span className="muted">({count})</span>
+        {onMoveOrder && (
+          <>
+            <button
+              type="button"
+              data-testid={`${testId}-up`}
+              aria-label={`上移 ${name}`}
+              disabled={!canMoveUp}
+              onClick={() => onMoveOrder(-1)}
+            >↑</button>
+            <button
+              type="button"
+              data-testid={`${testId}-down`}
+              aria-label={`下移 ${name}`}
+              disabled={!canMoveDown}
+              onClick={() => onMoveOrder(1)}
+            >↓</button>
+          </>
+        )}
         {!builtin && onRename && !renaming && (
           <button data-testid={`${testId}-rename`} onClick={() => { setNameDraft(name); setRenaming(true); }}>重命名</button>
         )}
@@ -140,8 +171,8 @@ export default function ScenarioGroup({
           </span>
         )}
       </div>
-      <div className="scenario-body">{children}</div>
-      {onCreateItem && (
+      {!collapsed && <div className="scenario-body">{children}</div>}
+      {onCreateItem && !collapsed && (
         <div className="scenario-footer">
           <button data-testid={`${testId}-create`} onClick={onCreateItem}>{createLabel}</button>
         </div>

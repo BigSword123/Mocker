@@ -58,6 +58,20 @@ export default function RedirectsPanel() {
     await refresh();
   };
 
+  const moveGroupOrder = async (name: string, dir: -1 | 1) => {
+    const names = scenarios.map((s) => s.name);
+    const idx = names.indexOf(name);
+    const target = idx + dir;
+    if (idx === -1 || target < 0 || target >= names.length) return;
+    [names[idx], names[target]] = [names[target], names[idx]];
+    try {
+      await api.scenariosReorder(names);
+    } catch {
+      // ignore invalid order payloads
+    }
+    await refresh();
+  };
+
   const handleDrop = async (targetScenario: string | undefined, payload: DragPayload) => {
     if (payload.type === 'item') {
       const rule = rules.find((r) => r.id === payload.value);
@@ -88,6 +102,7 @@ export default function RedirectsPanel() {
       </div>
       {groups.map((g) => {
         const testId = g.scenario === undefined ? UNGROUPED_ID : `group-${g.scenario}`;
+        const scenarioIdx = g.scenario === undefined ? -1 : scenarios.findIndex((s) => s.name === g.scenario);
         return (
           <ScenarioGroup
             key={g.scenario ?? UNGROUPED_ID}
@@ -100,6 +115,9 @@ export default function RedirectsPanel() {
             createLabel="+ 新建重定向"
             moveTargets={moveTargets(g.scenario)}
             draggableScenario={g.scenario !== undefined}
+            onMoveOrder={scenarioIdx === -1 ? undefined : (dir) => moveGroupOrder(g.scenario!, dir)}
+            canMoveUp={scenarioIdx > 0}
+            canMoveDown={scenarioIdx !== -1 && scenarioIdx < scenarios.length - 1}
             onToggle={g.scenario === undefined ? undefined : (enabled) => toggleGroup(g.scenario!, enabled)}
             onRename={g.scenario === undefined ? undefined : (newName) => renameGroup(g.scenario!, newName)}
             onDelete={g.scenario === undefined ? undefined : (moveTo) => deleteGroup(g.scenario!, moveTo)}

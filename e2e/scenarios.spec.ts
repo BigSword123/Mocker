@@ -206,3 +206,25 @@ test('drag a rule row onto a scenario group to re-assign (persisted)', async () 
   );
   expect(scenario).toBe('默认');
 });
+
+test('group collapse/expand and order swap buttons', async () => {
+  await win.evaluate(async () => {
+    if (!(await window.api.scenariosList()).some((s) => s.name === 'e2e-order')) await window.api.scenariosAdd('e2e-order');
+  });
+  await reopenRulesTab();
+  const grp = win.locator('[data-testid="group-e2e-order"]');
+
+  // 收起隐藏表格与新建按钮，展开恢复
+  await grp.getByTestId('group-e2e-order-collapse').click();
+  await expect(grp.locator('table')).toHaveCount(0);
+  await expect(grp.getByTestId('group-e2e-order-create')).toHaveCount(0);
+  await grp.getByTestId('group-e2e-order-collapse').click();
+  await expect(grp.locator('table')).toHaveCount(1);
+
+  // ↑ 上移一位并持久化；未分组没有顺序按钮
+  const before = await win.evaluate(async () => (await window.api.scenariosList()).map((s) => s.name).indexOf('e2e-order'));
+  await grp.getByTestId('group-e2e-order-up').click();
+  const after = await win.evaluate(async () => (await window.api.scenariosList()).map((s) => s.name).indexOf('e2e-order'));
+  expect(after).toBe(before - 1);
+  await expect(win.locator('[data-testid="group-ungrouped-up"]')).toHaveCount(0);
+});
