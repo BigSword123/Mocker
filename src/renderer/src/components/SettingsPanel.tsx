@@ -127,6 +127,18 @@ export default function SettingsPanel() {
           checked={settings.autoStartProxy}
           onChange={(e) => setSettings({ ...settings, autoStartProxy: e.target.checked })}
         />
+        <label>上游代理</label>
+        <input
+          placeholder="留空不走上游；http:// socks5:// pac+http://"
+          value={settings.upstreamProxyUrl}
+          onChange={(e) => setSettings({ ...settings, upstreamProxyUrl: e.target.value })}
+        />
+        <label>直连名单（逗号分隔）</label>
+        <input
+          placeholder="如 localhost, 127.0.0.1, internal.corp"
+          value={settings.upstreamNoProxy}
+          onChange={(e) => setSettings({ ...settings, upstreamNoProxy: e.target.value })}
+        />
         <label>系统代理</label>
         <div>
           <button onClick={toggleSystemProxy}>{systemProxy ? '关闭系统代理' : '开启系统代理'}</button>
@@ -142,6 +154,8 @@ export default function SettingsPanel() {
               httpsMode: settings.httpsMode,
               whitelist: settings.whitelist,
               autoStartProxy: settings.autoStartProxy,
+              upstreamProxyUrl: settings.upstreamProxyUrl,
+              upstreamNoProxy: settings.upstreamNoProxy,
             })
           }
         >
