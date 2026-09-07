@@ -83,6 +83,8 @@ export interface TrafficFilter {
 
 export type HttpsMode = 'whitelist' | 'full';
 
+export type MonitorMode = 'off' | 'phone' | 'computer';
+
 export interface Settings {
   proxyPort: number;
   wsPort: number;
@@ -90,6 +92,9 @@ export interface Settings {
   whitelist: string[];
   autoStartProxy: boolean;
   throttle: ThrottleSettings;
+  upstreamProxyUrl: string;
+  upstreamNoProxy: string;
+  monitorMode: MonitorMode;
 }
 
 export type ThrottlePreset = 'three-g' | 'slow-three-g' | 'dialup' | 'weak-wifi' | 'custom';
@@ -131,6 +136,9 @@ export const DEFAULT_SETTINGS: Settings = {
   whitelist: [],
   autoStartProxy: true,
   throttle: { enabled: false, preset: 'three-g', ...THROTTLE_PRESETS['three-g'] },
+  upstreamProxyUrl: '',
+  upstreamNoProxy: '',
+  monitorMode: 'off',
 };
 
 export interface ProxyStatus {
