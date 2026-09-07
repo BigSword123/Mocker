@@ -12,14 +12,113 @@ Charles 式本地抓包与 Mock 工具（开发者自用）。
 - 弱网限速（下行带宽 + 延迟 ± 抖动，预设 + 自定义，即时生效）
 - 根证书管理与手机扫码接入（Android / iOS）
 - 系统代理一键开关（macOS / Windows）
+- 监控模式三态切换（关 / 手机 / 电脑）：一次只监控一边，切换时自动清理另一侧
+- 上游代理：转发流量可经电脑已有代理（http / socks5 / pac），支持 curl 风格直连名单
 
-## 使用
+## 前置条件
 
-1. `npm run dev`（或打开打包应用），代理自动启动，默认端口 `8888`
-2. 点状态栏「开启系统代理」——浏览器/系统流量要经代理才能被抓到
-   - 应用退出时会自动还原系统代理，下次启动需重新开启
-3. 「流量」页实时查看请求，点击某行看请求/响应详情
-4. 「规则」页新建 Mock 规则，保存即生效，无需重启
+- Node.js ≥ 20（含 npm）；macOS 或 Windows（暂不支持 Linux）
+- 默认占用端口 `8888`（代理）/ `8899`（实时推送），需空闲；同机仅允许一个实例
+- 手机 USB 抓包（可选）：安装 [adb platform-tools](https://developer.android.com/tools/adb) 并加入 `PATH`，手机开启 USB 调试
+  - macOS：`brew install android-platform-tools`
+  - Windows：从 Android 官网下载 platform-tools 解压，把目录加入 `PATH` 后重启应用
+
+## 运行
+
+### 安装依赖（含 Electron 二进制下载）
+
+`npm install` 会随依赖下载 Electron 完整二进制（约 100 MB），国内网络直连 GitHub 常超时。先选一种加速方式，再执行安装：
+
+**方式一：国内镜像（推荐）**
+
+```bash
+# 写入项目 .npmrc，macOS / Windows 通用，一劳永逸
+echo "electron_mirror=https://npmmirror.com/mirrors/electron/" >> .npmrc
+```
+
+或仅在当前终端生效：
+
+```bash
+# macOS / Linux
+export ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"
+```
+
+```bat
+:: Windows CMD
+set ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/
+```
+
+```powershell
+# Windows PowerShell
+$env:ELECTRON_MIRROR = "https://npmmirror.com/mirrors/electron/"
+```
+
+**方式二：走本机已有代理下载（如 Clash，端口按实际改）**
+
+```bash
+# macOS / Linux
+export ELECTRON_GET_USE_PROXY=1
+export HTTPS_PROXY=http://127.0.0.1:7890
+```
+
+```bat
+:: Windows CMD
+set ELECTRON_GET_USE_PROXY=1
+set HTTPS_PROXY=http://127.0.0.1:7890
+```
+
+然后安装并启动：
+
+```bash
+npm install
+npm run dev
+```
+
+> 安装中断过没关系，直接重跑 `npm install`，会重新下载 Electron 二进制。
+
+### macOS
+
+```bash
+npm install
+npm run dev
+```
+
+系统代理经 `networksetup` 设置，无需管理员权限；仅安装根证书时需要输入管理员密码。
+
+### Windows
+
+在 PowerShell 或 CMD 中：
+
+```bat
+npm install
+npm run dev
+```
+
+系统代理经注册表（HKCU）设置，无需管理员身份；首次启动若防火墙弹窗，选「允许」以便手机经局域网接入。
+
+### 运行打包产物
+
+```bash
+npm run build && npx electron .
+```
+
+## 使用说明
+
+1. 启动后代理自动运行（默认 `8888`）。状态栏「监控」三态选择：
+   - **关**：不接管任何流量
+   - **手机**：一键建立 adb 隧道并设置手机代理（需数据线 + USB 调试；设备不在线只提示，不影响切换）
+   - **电脑**：接管系统代理——浏览器/系统流量要经代理才能被抓到
+   切换时自动清理另一侧（如电脑切手机会自动还原系统代理）；应用退出时自动还原系统代理与手机代理
+2. 「流量」页实时查看请求，点击某行看请求/响应详情
+3. 「规则」页新建 Mock 规则，保存即生效，无需重启
+
+### 上游代理
+
+「设置 → 上游代理」填入电脑上已有代理（如 Clash）的地址，未命中 Mock 规则的流量将经它出网：
+
+- URL 支持 `http://` `https://` `socks5://` `pac+http://`，可含账号密码；留空 = 不走上游
+- 「直连名单」：命中的主机绕过上游直连。逗号分隔，curl 风格：`example.com` 匹配本域及子域、`example.com:443` 限端口、`10.0.0.1` 精确 IP
+- 点「保存并重启代理」生效（自动重启，秒级）；手机/电脑两种模式的转发都经过上游
 
 ### 抓包转规则
 
@@ -36,7 +135,9 @@ Charles 式本地抓包与 Mock 工具（开发者自用）。
 
 ### HTTPS 抓包
 
-1. 「设置」页底部「安装根证书」区块，复制对应系统的命令执行（macOS 需管理员密码，Windows 需管理员 CMD）
+1. 「设置」页底部「安装根证书」区块，复制对应系统的命令执行：
+   - macOS（需管理员密码）：`sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain "$HOME/Library/Application Support/mocker/certs/ca.pem"`
+   - Windows（管理员 CMD）：`certutil -addstore -f ROOT "%APPDATA%\mocker\certs\ca.pem"`
 2. 白名单模式（默认）：仅解密名单内域名，其余直连透传；全量解密模式：解密全部 HTTPS
 3. 证书未信任时，HTTPS 请求会证书报错或透传，规则不会命中
 
