@@ -8,6 +8,7 @@ import type { RenderContext } from '../rules/template';
 import { resolveMapLocal, sendMapRemote } from '../rules/redirect';
 import { ruleEffective } from '../rules/rule-effective';
 import { applyThrottle } from './throttle';
+import { parseNoProxyList } from '../../shared/upstream';
 import { certDownloadResponse, guidePageResponse, type OnboardingResponse } from './onboarding';
 
 export interface ProxyServerOptions {
@@ -139,7 +140,11 @@ export class ProxyServer {
     // Single master handler: onboarding endpoints, rule matching, passthrough.
     // The whitelist CONNECT blind tunnel is handled by mockttp itself via
     // tlsInterceptOnly (CONNECT never reaches this handler in mockttp 4.x).
+    const upstreamUrl = settings.upstreamProxyUrl.trim();
     await server.forAnyRequest().always().thenPassThrough({
+      proxyConfig: upstreamUrl
+        ? { proxyUrl: upstreamUrl, noProxy: parseNoProxyList(settings.upstreamNoProxy) }
+        : undefined,
       beforeRequest: (req) => this.handle(req),
       beforeResponse: async (resp) => {
         if (!this.opts.getSettings().throttle?.enabled) return;
