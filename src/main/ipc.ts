@@ -11,9 +11,11 @@ import type { SettingsStore } from './storage/settings-store';
 import { disableSystemProxy, enableSystemProxy, systemProxyEnabled } from './system-proxy';
 import type { CaMaterial } from './certs/ca';
 import { buildCertInstallCommands } from './certs/install-commands';
-import type { RenderContext, ReplayRequest, RuleAction, RuleInput, RulePatch, Settings, TrafficEvent, MapLocalSaveInput } from '../shared/types';
+import type { RenderContext, ReplayRequest, RuleAction, RuleInput, RulePatch, Settings, TrafficEvent, MapLocalSaveInput, MonitorMode } from '../shared/types';
 import type { OpenDialogOptions, SaveDialogOptions } from 'electron';
 import { AdbService } from './adb/adb-service';
+import { applyMonitorMode } from './monitor-mode';
+import { validateUpstreamProxyUrl } from '../shared/upstream';
 import { validateAction } from './rules/validate';
 import { assertValidThrottle } from './proxy/throttle';
 import { renderTemplate } from './rules/template';
@@ -30,6 +32,7 @@ export interface IpcContext {
   ca: CaMaterial;
   history: HistoryWriter;
   dataDir: string;
+  adb: AdbService;
   systemProxySetByUs: () => boolean;
   onSystemProxyChanged: (enabled: boolean) => void;
   replay: ReplayService;
@@ -93,11 +96,10 @@ export function registerIpc(ctx: IpcContext): void {
     },
   );
 
-  const adb = new AdbService();
-  ipcMain.handle('adb:status', () => adb.status(ctx.settings.get().proxyPort));
-  ipcMain.handle('adb:setup-tunnel', () => adb.setupTunnel(ctx.settings.get().proxyPort));
-  ipcMain.handle('adb:set-phone-proxy', () => adb.setPhoneProxy(ctx.settings.get().proxyPort));
-  ipcMain.handle('adb:clear-phone-proxy', () => adb.clearPhoneProxy());
+  ipcMain.handle('adb:status', () => ctx.adb.status(ctx.settings.get().proxyPort));
+  ipcMain.handle('adb:setup-tunnel', () => ctx.adb.setupTunnel(ctx.settings.get().proxyPort));
+  ipcMain.handle('adb:set-phone-proxy', () => ctx.adb.setPhoneProxy(ctx.settings.get().proxyPort));
+  ipcMain.handle('adb:clear-phone-proxy', () => ctx.adb.clearPhoneProxy());
   ipcMain.handle('settings:get', () => ctx.settings.get());
   ipcMain.handle('settings:set', (_e, patch: Partial<Settings>) => {
     if (patch.proxyPort !== undefined) {
@@ -106,6 +108,16 @@ export function registerIpc(ctx: IpcContext): void {
       }
     }
     if (patch.throttle !== undefined) assertValidThrottle(patch.throttle);
+    if (patch.upstreamProxyUrl !== undefined) {
+      const err = validateUpstreamProxyUrl(patch.upstreamProxyUrl);
+      if (err) throw new Error(err);
+    }
+    if (
+      patch.monitorMode !== undefined &&
+      !['off', 'phone', 'computer'].includes(patch.monitorMode)
+    ) {
+      throw new Error('monitorMode 必须是 off/phone/computer');
+    }
     return ctx.settings.set(patch);
   });
 
@@ -120,6 +132,34 @@ export function registerIpc(ctx: IpcContext): void {
       await disableSystemProxy();
     }
     ctx.onSystemProxyChanged(enabled);
+  });
+
+  ipcMain.handle('monitor:set-mode', async (_e, mode: MonitorMode) => {
+    return applyMonitorMode(mode, {
+      proxyRunning: () => ctx.proxy.running,
+      startProxy: async () => {
+        await ctx.proxy.start();
+        ctx.history.openSession();
+      },
+      systemProxySetByUs: ctx.systemProxySetByUs,
+      restoreSystemProxy: async () => {
+        await disableSystemProxy();
+        ctx.onSystemProxyChanged(false);
+      },
+      enableSystemProxy: async () => {
+        await enableSystemProxy(ctx.proxy.port);
+        ctx.onSystemProxyChanged(true);
+      },
+      setupPhoneProxy: async () => {
+        const tunnel = await ctx.adb.setupTunnel(ctx.settings.get().proxyPort);
+        if (!tunnel.ok) return tunnel;
+        return ctx.adb.setPhoneProxy(ctx.settings.get().proxyPort);
+      },
+      clearPhoneProxy: () => ctx.adb.clearPhoneProxy(),
+      persistMode: async (m) => {
+        await ctx.settings.set({ monitorMode: m });
+      },
+    });
   });
   ipcMain.handle('system-proxy:status', () => systemProxyEnabled());
 

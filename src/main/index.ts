@@ -11,7 +11,8 @@ import { RedirectsStore } from './storage/redirects-store';
 import { RulesStore } from './storage/rules-store';
 import { ScenariosStore } from './storage/scenarios-store';
 import { SettingsStore } from './storage/settings-store';
-import { disableSystemProxy } from './system-proxy';
+import { AdbService } from './adb/adb-service';
+import { disableSystemProxy, enableSystemProxy } from './system-proxy';
 import type { Scenario, TrafficEvent } from '../shared/types';
 
 // Held as a module-level reference so the window is not garbage-collected.
@@ -87,6 +88,8 @@ async function bootstrap(): Promise<void> {
     onEvent,
   });
 
+  const adb = new AdbService();
+
   registerIpc({
     proxy,
     rules,
@@ -97,6 +100,7 @@ async function bootstrap(): Promise<void> {
     ca,
     history,
     dataDir,
+    adb,
     systemProxySetByUs: () => systemProxySetByUs,
     onSystemProxyChanged: (enabled) => {
       systemProxySetByUs = enabled;
@@ -110,6 +114,23 @@ async function bootstrap(): Promise<void> {
       history.openSession();
       // Best-effort cleanup of stale session files; never fail start over it.
       await history.prune().catch(() => {});
+
+      const mode = settings.get().monitorMode;
+      if (mode === 'computer') {
+        try {
+          await enableSystemProxy(proxy.port);
+          systemProxySetByUs = true;
+        } catch (err) {
+          console.warn('自动恢复系统代理失败', err);
+        }
+      } else if (mode === 'phone') {
+        try {
+          const tunnel = await adb.setupTunnel(proxy.port);
+          if (tunnel.ok) await adb.setPhoneProxy(proxy.port);
+        } catch {
+          // 没插线/没装 adb：静默跳过
+        }
+      }
     } catch (err) {
       dialog.showErrorBox('代理启动失败', String(err));
     }

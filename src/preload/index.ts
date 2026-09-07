@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { Api } from '../shared/api';
-import type { AdbOpResult, AdbStatus, RedirectRule, RenderContext, ReplayRequest, RuleAction, RuleInput, RulePatch, Settings, TrafficEvent, MapLocalSaveInput } from '../shared/types';
+import type { AdbOpResult, AdbStatus, MonitorMode, RedirectRule, RenderContext, ReplayRequest, RuleAction, RuleInput, RulePatch, Settings, TrafficEvent, MapLocalSaveInput } from '../shared/types';
 
 const api: Api = {
   proxyStart: () => ipcRenderer.invoke('proxy:start'),
@@ -19,6 +19,7 @@ const api: Api = {
   certInstallCommands: () => ipcRenderer.invoke('cert:install-commands'),
   systemProxySet: (enabled: boolean) => ipcRenderer.invoke('system-proxy:set', enabled),
   systemProxyStatus: () => ipcRenderer.invoke('system-proxy:status'),
+  monitorSetMode: (mode: MonitorMode) => ipcRenderer.invoke('monitor:set-mode', mode),
   appPlatform: () => ipcRenderer.invoke('app:platform'),
   replaySend: (input: ReplayRequest, replayedFromId?: string) =>
     ipcRenderer.invoke('replay:send', input, replayedFromId),

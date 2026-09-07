@@ -1,4 +1,4 @@
-import type { AdbOpResult, AdbStatus, CertInfo, CertInstallCommands, MapLocalSaveInput, MockRule, ProxyStatus, RedirectRule, RenderContext, ReplayRequest, RuleAction, RuleInput, RulePatch, Scenario, Settings, TrafficEvent } from './types';
+import type { AdbOpResult, AdbStatus, CertInfo, CertInstallCommands, MapLocalSaveInput, MockRule, MonitorMode, ProxyStatus, RedirectRule, RenderContext, ReplayRequest, RuleAction, RuleInput, RulePatch, Scenario, Settings, TrafficEvent } from './types';
 
 export interface Api {
   proxyStart(): Promise<void>;
@@ -20,6 +20,7 @@ export interface Api {
   certInstallCommands(): Promise<CertInstallCommands>;
   systemProxySet(enabled: boolean): Promise<void>;
   systemProxyStatus(): Promise<boolean>;
+  monitorSetMode(mode: MonitorMode): Promise<{ mode: MonitorMode; notice?: string }>;
   appPlatform(): Promise<'macos' | 'windows' | 'other'>;
   replaySend(input: ReplayRequest, replayedFromId?: string): Promise<string>;
   harExport(payload: { events: TrafficEvent[]; defaultName: string }): Promise<{ saved: boolean; filePath?: string }>;
