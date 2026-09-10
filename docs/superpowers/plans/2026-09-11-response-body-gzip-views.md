@@ -662,7 +662,7 @@ git commit -m "feat(ui): gzip compress and decompress in body codec"
 创建 `src/renderer/src/components/ResponseBodyViews.tsx`：
 
 ```tsx
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   gzipCompress,
   gzipDecodeBytes,
@@ -763,8 +763,8 @@ export default function ResponseBodyViews({ body, eventId }: Props) {
   const label = (key: string, base: string) => (copied === key ? '已复制' : base);
   const tabClass = (v: BodyView) => (view === v ? 'tab active' : 'tab');
 
-  let actions: React.ReactNode = null;
-  let content: React.ReactNode = null;
+  let actions: ReactNode = null;
+  let content: ReactNode = null;
 
   if (view === 'raw') {
     actions = (
@@ -879,8 +879,6 @@ export default function ResponseBodyViews({ body, eventId }: Props) {
 
 Run: `npm run typecheck`
 Expected: 无输出，退出码 0
-
-若报 `React.ReactNode` 找不到，在文件顶部 import 行补 `import type { ReactNode } from 'react';` 并把两处 `React.ReactNode` 换成 `ReactNode`。
 
 - [ ] **Step 4: 跑全量单测确认没有回归**
 
