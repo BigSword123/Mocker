@@ -3,6 +3,7 @@ import { test, expect } from '@playwright/test';
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import * as zlib from 'node:zlib';
 
 let app: ElectronApplication;
 let win: Page;
@@ -285,4 +286,57 @@ test('WebP UI：未选目录时开始按钮禁用，质量默认 80', async () =
   await expect(win.getByTestId('webp-src')).toHaveValue('');
   await expect(win.getByTestId('webp-out')).toHaveValue('');
   await expect(win.getByTestId('webp-quality')).toHaveValue('80');
+});
+
+async function gotoGzipText() {
+  await win.getByTestId('tools-tab').click();
+  await win.getByTestId('tool-tab-gzip').click();
+  await win.getByTestId('gzip-mode-text').click();
+}
+
+test('gzip 文本模式：文本 -> base64 -> 文本 往返一致', async () => {
+  await gotoGzipText();
+
+  const text = 'hello mocker 世界 {"a":1}';
+  await win.getByTestId('gzip-text-input').fill(text);
+  await win.getByTestId('gzip-text-compress').click();
+
+  const b64 = await win.getByTestId('gzip-text-output').inputValue();
+  expect(b64.length).toBeGreaterThan(0);
+  // base64 解出来必须以 gzip 魔数开头
+  expect(Array.from(Buffer.from(b64, 'base64').subarray(0, 2))).toEqual([0x1f, 0x8b]);
+
+  await win.getByTestId('gzip-text-input').fill(b64);
+  await win.getByTestId('gzip-text-decompress').click();
+  await expect(win.getByTestId('gzip-text-output')).toHaveValue(text);
+});
+
+test('gzip 文本模式：非法 base64 报可读错误', async () => {
+  await gotoGzipText();
+  await win.getByTestId('gzip-text-input').fill('!!! 这根本不是 base64 !!!');
+  await win.getByTestId('gzip-text-decompress').click();
+  await expect(win.getByTestId('gzip-text-error')).toHaveText('不是合法的 base64');
+});
+
+test('gzip 文本模式：base64 合法但不是 gzip 时报魔数错误', async () => {
+  await gotoGzipText();
+  await win.getByTestId('gzip-text-input').fill(Buffer.from('plain text', 'utf8').toString('base64'));
+  await win.getByTestId('gzip-text-decompress').click();
+  await expect(win.getByTestId('gzip-text-error')).toContainText('不是 gzip 数据');
+});
+
+test('gzip 文本模式：数据被截断时报错且文案非空', async () => {
+  await gotoGzipText();
+  const gz = zlib.gzipSync(Buffer.from('hello mocker'.repeat(40), 'utf8'));
+  // 砍掉后半段：魔数完好，但 deflate 流不完整，会走到 DecompressionStream 失败路径
+  const truncated = gz.subarray(0, Math.floor(gz.length / 2)).toString('base64');
+
+  await win.getByTestId('gzip-text-input').fill(truncated);
+  await win.getByTestId('gzip-text-decompress').click();
+
+  // DecompressionStream 抛的 TypeError message 是空串，errorMessage 必须靠 name 兜住，
+  // 否则用户看到一个空白错误框
+  const err = win.getByTestId('gzip-text-error');
+  await expect(err).toBeVisible();
+  expect(((await err.textContent()) ?? '').trim().length).toBeGreaterThan(0);
 });

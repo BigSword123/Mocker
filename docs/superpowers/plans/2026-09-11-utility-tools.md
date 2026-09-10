@@ -2238,7 +2238,7 @@ git commit -m "feat(ui): batch png/jpg to webp conversion
 - Depends on: `src/renderer/src/lib/body-codec.ts`（**对方创建，本计划不得创建**）
 - Test: `e2e/tools.spec.ts`（追加）
 
-- [ ] **Step 1: 门禁检查**
+- [x] **Step 1: 门禁检查**
 
 Run:
 
@@ -2256,7 +2256,7 @@ Expected（全部满足才继续）：
 
 **若 BLOCKED**：停止本 Task，先让 `2026-09-11-response-body-gzip-views.md` 的 Task 2-4 落地，或把该模块的实现搬到这里作为本 Task 的第一步（需与对方会话协调，避免两边都写）。Task 1-8 的产出已经完整可用，本 Task 未做不影响交付前两个工具与 gzip 文件模式。
 
-- [ ] **Step 2: 写失败的 e2e**
+- [x] **Step 2: 写失败的 e2e**
 
 在 `e2e/tools.spec.ts` 末尾追加：
 
@@ -2291,12 +2291,12 @@ test('gzip 文本模式：非法 base64 解压行内报错不崩', async () => {
 });
 ```
 
-- [ ] **Step 3: 跑 e2e 确认失败**
+- [x] **Step 3: 跑 e2e 确认失败**
 
 Run: `npx playwright test e2e/tools.spec.ts -g "gzip 文本模式"`
 Expected: FAIL — `gzip-mode-text` 找不到
 
-- [ ] **Step 4: 改造 GzipTool.tsx 加入文本模式**
+- [x] **Step 4: 改造 GzipTool.tsx 加入文本模式**
 
 `src/renderer/src/components/GzipTool.tsx`：import 区加（`body-codec` 的实际导出名以 Step 1 门禁核对结果为准）：
 
@@ -2413,17 +2413,17 @@ import { gzipCompress, gzipDecodeBytes, gunzipText, toBase64 } from '../lib/body
   );
 ```
 
-- [ ] **Step 5: 跑 typecheck**
+- [x] **Step 5: 跑 typecheck**
 
 Run: `npm run typecheck`
 Expected: 无报错。若 `body-codec` 的导出签名与 Step 4 写的不一致，以门禁核对到的实际签名为准调整调用处
 
-- [ ] **Step 6: 跑 e2e 确认通过**
+- [x] **Step 6: 跑 e2e 确认通过**
 
 Run: `npm run test:e2e -- e2e/tools.spec.ts`
 Expected: PASS，15 个 test 全绿
 
-- [ ] **Step 7: 提交**
+- [x] **Step 7: 提交**
 
 ```bash
 git status --short
