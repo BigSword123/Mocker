@@ -1,7 +1,7 @@
 # 实用工具面板 设计
 
 日期：2026-09-11
-状态：已与用户对齐（决策点见文末）
+状态：已与用户对齐（决策点见文末）。**存在前置依赖**：gzip 文本模式复用姊妹 spec 的 `body-codec.ts`，该模块尚未实现，实现计划须显式排序。
 
 ## 背景
 
@@ -20,7 +20,7 @@
 - 不做 zlib deflate / brotli，只做 gzip。
 - 不做 webp → png/jpg 反向转换，不做 avif / tiff / gif。
 - 不做图片缩放、裁剪、无损 webp、metadata 控制。
-- 不与流量面板联动（例如「把这条响应体一键 gzip 解压」）——虽然契合 mocker 场景，但本次不做。
+- 不与流量面板联动（例如「把这条响应体一键 gzip 解压」）。**这不是遗漏**：该能力已由同日姊妹 spec `2026-09-11-response-body-gzip-views-design.md` 覆盖，在流量详情区做响应体的派生视图。两份 spec 的分工是——那份负责「看抓到的响应体」，本份负责「用户主动拿文件或文本进来加工」，只在 gzip 字节逻辑上共用 `body-codec.ts`（见 4.1）。
 - 不引入任何新 npm 依赖。
 
 ## 关键技术决策
@@ -88,30 +88,40 @@ IPC 开销实测评估：200 张 1MB 图片额外复制约 200MB，摊到全程�
 
 ## 4. gzip 工具
 
+两种模式分处两个进程，各自复用该进程里最自然的实现，**不重复造 gzip**：
+
+| 模式 | 引擎 | 位置 | IPC |
+|---|---|---|---|
+| 文本 ↔ base64 | `CompressionStream` / `DecompressionStream` | 渲染进程 `src/renderer/src/lib/body-codec.ts`（**复用姊妹 spec**） | 无 |
+| 文件 ↔ `.gz` 文件 | Node `zlib` | 主进程 `src/main/tools/gzip.ts` | 1 个 |
+
+### 4.1 文本模式：复用 body-codec.ts
+
+同日另一份设计 `2026-09-11-response-body-gzip-views-design.md`（状态「已确认，待实现」）已在流量详情面板引入 `src/renderer/src/lib/body-codec.ts`，提供 `gzipCompress` / `gunzipText` / `toBase64` / `toHexDump` / `sniffGzip`，纯渲染进程、不依赖 IPC。
+
+本工具的文本模式**直接调用它**，不新增任何 gzip 字节逻辑，也不新增 IPC。文本模式行为：`compress` 读文本 → 输出 base64；`decompress` 读 base64 → 输出文本；解压结果非法 UTF-8 时（`gunzipText` 用 `TextDecoder(fatal: true)`）就地报错并保留 base64 供复制。
+
+**落地顺序依赖**：`body-codec.ts` 目前尚未实现。实现本工具前需先落地它——要么先做完那份 spec，要么把 `body-codec.ts` 作为本次工作的第一步产出（两份 spec 共用同一个模块与同一份 `tests/body-codec.test.ts`）。这一点必须在实现计划里显式排序，否则文本模式无地基。
+
+### 4.2 文件模式：主进程 Node zlib
+
 逻辑放 `src/main/tools/gzip.ts`，纯 Buffer 进出，vitest 直接可测：
 
 | 函数 | 说明 |
 |---|---|
-| `gzipCompress(buf, level = 9)` | Node `zlib.gzipSync` |
-| `gzipDecompress(buf, maxOutputBytes = 256MB)` | 流式解压，超限中止并抛错 |
+| `gzipCompressFile(buf, level = 9)` | Node `zlib.gzipSync` |
+| `gzipDecompressFile(buf, maxOutputBytes = 256MB)` | 流式解压，超限中止并抛错 |
+
+文件模式之所以不用渲染进程的 `CompressionStream`：它需要 fs 读写、保存对话框与大文件流式处理，这些只能在主进程；把整个文件字节搬到渲染进程再搬回来，只为复用一个编解码器，不划算。
 
 **解压侧的两道校验**（gzip 输入属外部数据，是真正的系统边界）：
 
 1. 魔数校验：前两字节非 `1f 8b` → 明确中文文案「不是有效的 gzip 数据」
-2. **解压炸弹防护**：输出超过 256MB 立即中止抛错。小 .gz 可展开到 GB 级，抓包场景下响应体可能来自不可信服务器。
+2. **解压炸弹防护**：输出超过 256MB 立即中止抛错。小 `.gz` 可展开到 GB 级，抓包场景下文件可能来自不可信来源。
 
 非法 / 截断 gzip 数据 → 明确错误文案，不崩溃。
 
-**IPC（2 个）**：
-
-| channel | 入参 | 返回 |
-|---|---|---|
-| `tools:gzip-file` | `{ mode: 'compress' \| 'decompress', inputPath }` | `{ saved, filePath, inputBytes, outputBytes }` |
-| `tools:gzip-text` | `{ mode, text?, base64? }` | `{ base64?, text?, binary: boolean }` |
-
-- 文件模式：弹保存对话框，默认名压缩时加 `.gz`、解压时去掉 `.gz`
-- 文本模式：二进制用 **base64** 表示（与 HAR 对二进制 body 的处理一致）
-- 文本模式字段契约明确无歧义：`compress` 只读 `text`、只返回 `base64`；`decompress` 只读 `base64`、返回 `text`。解压结果不是合法 UTF-8 时 `text` 为 `undefined`、`binary: true`，并把原始字节的 base64 放在 `base64` 里回落展示。传入与 mode 不匹配的字段视为空输入报错，不做猜测性兜底。
+**IPC（1 个）**：`tools:gzip-file`，入参 `{ mode: 'compress' | 'decompress', inputPath }`，返回 `{ saved, filePath, inputBytes, outputBytes }`。弹保存对话框，默认名压缩时加 `.gz`、解压时去掉 `.gz`。
 
 **UI**：`.tab-row` 分「文件模式」「文本模式」。文件模式显示原体积 / 结果体积 / 压缩率；文本模式两侧 textarea 互转 + 复制按钮。
 
@@ -159,20 +169,19 @@ IPC 开销实测评估：200 张 1MB 图片额外复制约 200MB，摊到全程�
 
 ## 6. API 接线
 
-`src/shared/types.ts` 新增工具相关类型（`GzipMode`、`GzipFileResult`、`GzipTextResult`、`ScannedImage`、`ImageScanResult`、`WebpWriteResult`）。
+`src/shared/types.ts` 新增工具相关类型（`GzipMode`、`GzipFileResult`、`ScannedImage`、`ImageScanResult`、`WebpWriteResult`）。
 
-`src/shared/api.ts` + `src/preload/index.ts` + `src/main/ipc.ts` 各新增 6 项：
+`src/shared/api.ts` + `src/preload/index.ts` + `src/main/ipc.ts` 各新增 5 项：
 
 | channel / 方法 | 用途 |
 |---|---|
 | `dialog:open-directory` / `openDirectoryDialog()` | 返回目录路径或 null。与现有 `dialog:open-file` 对称命名，通用便于复用 |
 | `tools:gzip-file` | 文件模式压缩/解压 |
-| `tools:gzip-text` | 文本模式压缩/解压 |
 | `tools:scan-images` | 递归扫描源目录 |
 | `tools:read-image` | 读单张源图字节 |
-| `tools:write-webp` | 按相对路径镜像写入 |
+| `tools:write-webp` | 按 `outName` 镜像写入输出目录 |
 
-时间戳工具不占 IPC。
+时间戳工具与 gzip 文本模式均不占 IPC。
 
 ## 7. 测试
 
@@ -181,7 +190,7 @@ IPC 开销实测评估：200 张 1MB 图片额外复制约 200MB，摊到全程�
 | 文件 | 覆盖 |
 |---|---|
 | `tests/datetime.test.ts` | s/ms 自动识别；UTC 与 Asia/Shanghai 格式化；America/New_York 春秋 DST 边界；双向往返一致；非法输入与超范围 |
-| `tests/gzip.test.ts` | 往返一致；魔数校验；解压上限触发；空输入；非 gzip 输入报错文案；解压结果非 UTF-8 时 `binary: true` 回落；mode 与字段不匹配时报错 |
+| `tests/gzip.test.ts` | 仅覆盖主进程文件模式：往返一致；魔数校验；解压上限触发；空输入；非 gzip 输入报错文案。文本模式的字节逻辑由姊妹 spec 的 `tests/body-codec.test.ts` 覆盖，本 spec 不重复测 |
 | `tests/image-scan.test.ts` | 递归；扩展名大小写；相对路径形态；空目录；limit 触发；`outName` 生成；同目录 `b.png` / `b.jpg` 撞名改名策略；`readImage` 路径收敛校验拒绝越界 `relPath`（tmpdir 造夹具） |
 
 **e2e（`e2e/tools.spec.ts`，启动真实 Electron，与现有 e2e 一致不 mock api）**：
@@ -204,5 +213,6 @@ README 新增「实用工具」小节：三个工具的用途、webp 的已知�
 1. WebP 引擎用 Chromium 内置编码，**零新增依赖**（否决 sharp 与 WASM）；
 2. 批量输出到**用户选定目录并镜像源目录结构**，原图完全不动；
 3. gzip **同时支持文件模式与文本模式**；
-4. 批量管道走**主进程 dialog + 主进程读取**（方案 A）；
-5. gzip 解压上限 256MB、图片扫描上限 5000 张、webp 质量默认 80。
+4. gzip **双进程分工**：文本模式复用姊妹 spec 的渲染进程 `body-codec.ts`（零 IPC、不重复造 gzip），文件模式用主进程 Node `zlib`（需要 fs 与流式处理）。前置依赖 `body-codec.ts` 先落地；
+5. 批量管道走**主进程 dialog + 主进程读取**（方案 A）；
+6. gzip 解压上限 256MB、图片扫描上限 5000 张、webp 质量默认 80。
