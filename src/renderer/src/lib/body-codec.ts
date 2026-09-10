@@ -48,6 +48,54 @@ export function gzipDecodeBytes(body: string, via: GzipVia): Uint8Array {
   return via === 'base64' ? base64ToBytes(body.trim()) : new TextEncoder().encode(body);
 }
 
+export async function gunzipText(bytes: Uint8Array): Promise<string> {
+  const out = await readAll(oneShotStream(bytes).pipeThrough(new DecompressionStream('gzip')));
+  return new TextDecoder('utf-8', { fatal: true }).decode(out);
+}
+
+/** 只返回字节与统计；hex / base64 由视图层按渲染或复制的需要分别格式化。 */
+export async function gzipCompress(text: string): Promise<CompressResult> {
+  const raw = new TextEncoder().encode(text);
+  const bytes = await readAll(oneShotStream(raw).pipeThrough(new CompressionStream('gzip')));
+  return {
+    rawBytes: raw.byteLength,
+    gzippedBytes: bytes.byteLength,
+    ratio: raw.byteLength === 0 ? 0 : bytes.byteLength / raw.byteLength,
+    bytes,
+  };
+}
+
+function oneShotStream(bytes: Uint8Array): ReadableStream<Uint8Array<ArrayBuffer>> {
+  const copy = new Uint8Array(bytes);
+  return new ReadableStream<Uint8Array<ArrayBuffer>>({
+    start(controller) {
+      if (copy.byteLength > 0) controller.enqueue(copy);
+      controller.close();
+    },
+  });
+}
+
+async function readAll<T extends Uint8Array>(stream: ReadableStream<T>): Promise<Uint8Array> {
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (value !== undefined) {
+      chunks.push(value);
+      total += value.byteLength;
+    }
+  }
+  const out = new Uint8Array(total);
+  let pos = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, pos);
+    pos += chunk.byteLength;
+  }
+  return out;
+}
+
 export function toHexDump(bytes: Uint8Array, maxBytes?: number): string {
   if (bytes.length === 0) return '';
   const limit = maxBytes === undefined ? bytes.length : Math.min(maxBytes, bytes.length);

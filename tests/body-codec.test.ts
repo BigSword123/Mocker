@@ -1,6 +1,13 @@
 import { gzipSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
-import { gzipDecodeBytes, sniffGzip, toBase64, toHexDump } from '../src/renderer/src/lib/body-codec';
+import {
+  gzipCompress,
+  gzipDecodeBytes,
+  gunzipText,
+  sniffGzip,
+  toBase64,
+  toHexDump,
+} from '../src/renderer/src/lib/body-codec';
 
 function gzipBase64(text: string): string {
   return Buffer.from(gzipSync(new TextEncoder().encode(text))).toString('base64');
@@ -134,5 +141,63 @@ describe('toBase64', () => {
     for (let i = 0; i < bytes.length; i += 1) bytes[i] = i % 251;
     const back = Uint8Array.from(atob(toBase64(bytes)), (c) => c.charCodeAt(0));
     expect(back).toEqual(bytes);
+  });
+});
+
+describe('gzipCompress / gunzipText', () => {
+  it('压缩再解压得到原文（含中文多字节）', async () => {
+    const text = '{"msg":"hello 世界","n":1}';
+    const result = await gzipCompress(text);
+    expect(await gunzipText(result.bytes)).toBe(text);
+  });
+
+  it('压缩输出是合法 gzip（魔数 1f 8b）', async () => {
+    const result = await gzipCompress('hello');
+    expect(result.bytes[0]).toBe(0x1f);
+    expect(result.bytes[1]).toBe(0x8b);
+  });
+
+  it('统计字段自洽', async () => {
+    const result = await gzipCompress('a'.repeat(1000));
+    expect(result.rawBytes).toBe(1000);
+    expect(result.gzippedBytes).toBe(result.bytes.byteLength);
+    expect(result.gzippedBytes).toBeLessThan(result.rawBytes);
+    expect(result.ratio).toBeCloseTo(result.gzippedBytes / 1000, 10);
+  });
+
+  it('rawBytes 按 UTF-8 字节数计而非字符数', async () => {
+    expect((await gzipCompress('世界')).rawBytes).toBe(6);
+  });
+
+  it('空串 rawBytes 与 ratio 均为 0，且不抛错', async () => {
+    const result = await gzipCompress('');
+    expect(result.rawBytes).toBe(0);
+    expect(result.ratio).toBe(0);
+    expect(result.gzippedBytes).toBeGreaterThan(0);
+  });
+
+  it('对非 gzip 字节解压抛错', async () => {
+    await expect(gunzipText(new TextEncoder().encode('plain text'))).rejects.toThrow();
+  });
+
+  it('对含 U+FFFD 的有损字节解压抛错', async () => {
+    const lossy = new TextEncoder().encode(String.fromCharCode(0x1f, 0x8b, 0xfffd, 0xfffd));
+    await expect(gunzipText(lossy)).rejects.toThrow();
+  });
+
+  it('对空字节数组解压抛错', async () => {
+    await expect(gunzipText(new Uint8Array(0))).rejects.toThrow();
+  });
+
+  it('base64 命中的响应体可完整解出原文', async () => {
+    const b64 = Buffer.from(gzipSync(new TextEncoder().encode('round trip'))).toString('base64');
+    expect(sniffGzip(b64).via).toBe('base64');
+    expect(await gunzipText(gzipDecodeBytes(b64, 'base64'))).toBe('round trip');
+  });
+
+  it('压缩结果可直接喂给 toHexDump 与 toBase64', async () => {
+    const result = await gzipCompress('hello');
+    expect(toHexDump(result.bytes, 4096).startsWith('00000000  1f 8b')).toBe(true);
+    expect(toBase64(result.bytes).startsWith('H4sI')).toBe(true);
   });
 });
