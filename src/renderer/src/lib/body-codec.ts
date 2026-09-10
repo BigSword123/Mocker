@@ -3,6 +3,8 @@ const GZIP_MAGIC_1 = 0x8b;
 const BASE64_PREFIX_LEN = 16;
 const BASE64_PREFIX_PATTERN = /^[A-Za-z0-9+/=]+$/;
 const BASE64_MIN_PREFIX_LEN = 4;
+const HEX_ROW_BYTES = 16;
+const BASE64_CHUNK_BYTES = 8192;
 
 export type GzipVia = 'raw-bytes' | 'base64';
 
@@ -44,6 +46,35 @@ export function sniffGzip(body: string): GzipSniffResult {
 /** base64 路径无损；raw-bytes 路径有损——非法 UTF-8 字节在抓包时已被替换为 U+FFFD。 */
 export function gzipDecodeBytes(body: string, via: GzipVia): Uint8Array {
   return via === 'base64' ? base64ToBytes(body.trim()) : new TextEncoder().encode(body);
+}
+
+export function toHexDump(bytes: Uint8Array, maxBytes?: number): string {
+  if (bytes.length === 0) return '';
+  const limit = maxBytes === undefined ? bytes.length : Math.min(maxBytes, bytes.length);
+  const lines: string[] = [];
+  for (let offset = 0; offset < limit; offset += HEX_ROW_BYTES) {
+    const row = bytes.subarray(offset, Math.min(offset + HEX_ROW_BYTES, limit));
+    const hex: string[] = [];
+    for (let i = 0; i < HEX_ROW_BYTES; i += 1) {
+      const b = row[i];
+      hex.push(b === undefined ? '  ' : b.toString(16).padStart(2, '0'));
+    }
+    const ascii = Array.from(row, (b) => (b >= 0x20 && b <= 0x7e ? String.fromCharCode(b) : '.')).join('');
+    lines.push(
+      `${offset.toString(16).padStart(8, '0')}  ${hex.slice(0, 8).join(' ')}  ${hex.slice(8).join(' ')}  |${ascii}|`,
+    );
+  }
+  if (limit < bytes.length) lines.push(`…（已截断，仅显示前 ${limit} 字节）`);
+  return lines.join('\n');
+}
+
+/** 分块避免 String.fromCharCode 的实参数量上限。 */
+export function toBase64(bytes: Uint8Array): string {
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += BASE64_CHUNK_BYTES) {
+    bin += String.fromCharCode(...bytes.subarray(i, i + BASE64_CHUNK_BYTES));
+  }
+  return btoa(bin);
 }
 
 function base64ToBytes(b64: string): Uint8Array {
