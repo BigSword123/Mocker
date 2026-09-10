@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { Api } from '../shared/api';
-import type { AdbOpResult, AdbStatus, MonitorMode, RedirectRule, RenderContext, ReplayRequest, RuleAction, RuleInput, RulePatch, Settings, TrafficEvent, MapLocalSaveInput } from '../shared/types';
+import type { AdbOpResult, AdbStatus, GzipMode, MonitorMode, RedirectRule, RenderContext, ReplayRequest, RuleAction, RuleInput, RulePatch, Settings, TrafficEvent, MapLocalSaveInput } from '../shared/types';
 
 const api: Api = {
   proxyStart: () => ipcRenderer.invoke('proxy:start'),
@@ -39,6 +39,12 @@ const api: Api = {
   rulesResetSequence: (ruleId) => ipcRenderer.invoke('rules:reset-sequence', ruleId),
   maplocalSave: (input: MapLocalSaveInput) => ipcRenderer.invoke('maplocal:save', input),
   openFileDialog: () => ipcRenderer.invoke('dialog:open-file'),
+  openDirectoryDialog: () => ipcRenderer.invoke('dialog:open-directory'),
+  gzipFile: (mode: GzipMode, inputPath: string) => ipcRenderer.invoke('tools:gzip-file', mode, inputPath),
+  scanImages: (dir: string) => ipcRenderer.invoke('tools:scan-images', dir),
+  readImage: (dir: string, relPath: string) => ipcRenderer.invoke('tools:read-image', dir, relPath),
+  writeWebp: (outDir: string, outName: string, bytes: Uint8Array) =>
+    ipcRenderer.invoke('tools:write-webp', outDir, outName, bytes),
   adbStatus: () => ipcRenderer.invoke('adb:status'),
   adbSetupTunnel: () => ipcRenderer.invoke('adb:setup-tunnel'),
   adbSetPhoneProxy: () => ipcRenderer.invoke('adb:set-phone-proxy'),

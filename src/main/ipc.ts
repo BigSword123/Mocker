@@ -1,6 +1,9 @@
 import { BrowserWindow, dialog, ipcMain } from 'electron';
 import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { networkInterfaces } from 'node:os';
+import { gzipCompressBytes, gzipDecompressBytes } from './tools/gzip';
+import { readImage, scanImages, writeWebp } from './tools/image-scan';
 import type { ProxyServer } from './proxy/proxy-server';
 import type { HistoryWriter } from './storage/history';
 import type { MapLocalStore } from './storage/maplocal-store';
@@ -11,7 +14,7 @@ import type { SettingsStore } from './storage/settings-store';
 import { disableSystemProxy, enableSystemProxy, systemProxyEnabled } from './system-proxy';
 import type { CaMaterial } from './certs/ca';
 import { buildCertInstallCommands } from './certs/install-commands';
-import type { RenderContext, ReplayRequest, RuleAction, RuleInput, RulePatch, Settings, TrafficEvent, MapLocalSaveInput, MonitorMode } from '../shared/types';
+import type { RenderContext, ReplayRequest, RuleAction, RuleInput, RulePatch, Settings, TrafficEvent, MapLocalSaveInput, MonitorMode, GzipMode } from '../shared/types';
 import type { OpenDialogOptions, SaveDialogOptions } from 'electron';
 import { AdbService } from './adb/adb-service';
 import { applyMonitorMode } from './monitor-mode';
@@ -198,6 +201,48 @@ export function registerIpc(ctx: IpcContext): void {
     if (canceled || filePaths.length === 0) return null;
     return filePaths[0]!;
   });
+
+  ipcMain.handle('dialog:open-directory', async () => {
+    const { canceled, filePaths } = await showOpenDialog({ properties: ['openDirectory'] });
+    if (canceled || filePaths.length === 0) return null;
+    return filePaths[0]!;
+  });
+
+  ipcMain.handle('tools:gzip-file', async (_e, mode: GzipMode, inputPath: string) => {
+    const input = await fs.promises.readFile(inputPath);
+    const output = mode === 'compress' ? await gzipCompressBytes(input) : await gzipDecompressBytes(input);
+    const base = path.basename(inputPath);
+    const defaultPath =
+      mode === 'compress'
+        ? base.endsWith('.gz')
+          ? base
+          : `${base}.gz`
+        : base.replace(/\.gz$/i, '') || `${base}.out`;
+    const { canceled, filePath } = await showSaveDialog({
+      defaultPath,
+      filters: [
+        {
+          name: mode === 'compress' ? 'Gzip' : 'All Files',
+          extensions: mode === 'compress' ? ['gz'] : ['*'],
+        },
+      ],
+    });
+    if (canceled || !filePath) {
+      return { saved: false as const, inputBytes: input.length, outputBytes: output.length };
+    }
+    await fs.promises.writeFile(filePath, output);
+    return { saved: true as const, filePath, inputBytes: input.length, outputBytes: output.length };
+  });
+
+  ipcMain.handle('tools:scan-images', (_e, dir: string) => scanImages(dir));
+  ipcMain.handle('tools:read-image', (_e, dir: string, relPath: string) => readImage(dir, relPath));
+  ipcMain.handle(
+    'tools:write-webp',
+    async (_e, outDir: string, outName: string, bytes: Uint8Array) => {
+      const p = await writeWebp(outDir, outName, bytes);
+      return { path: p, bytes: bytes.length };
+    },
+  );
 
   ipcMain.handle('redirects:list', () => ctx.redirects.list());
   ipcMain.handle('redirects:add', (_e, input) => ctx.redirects.add(input));

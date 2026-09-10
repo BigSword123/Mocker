@@ -258,3 +258,18 @@ export interface ScannedImage {
   /** 相对输出目录的写入名，如 `sub/a.webp`；同目录撞名时为 `sub/a.png.webp` */
   outName: string;
 }
+
+export type GzipMode = 'compress' | 'decompress';
+
+export interface GzipFileResult {
+  /** 用户在保存对话框点了取消则为 false，此时无 filePath */
+  saved: boolean;
+  filePath?: string;
+  inputBytes: number;
+  outputBytes: number;
+}
+
+export interface WebpWriteResult {
+  path: string;
+  bytes: number;
+}

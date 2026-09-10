@@ -1,4 +1,4 @@
-import type { AdbOpResult, AdbStatus, CertInfo, CertInstallCommands, MapLocalSaveInput, MockRule, MonitorMode, ProxyStatus, RedirectRule, RenderContext, ReplayRequest, RuleAction, RuleInput, RulePatch, Scenario, Settings, TrafficEvent } from './types';
+import type { AdbOpResult, AdbStatus, CertInfo, CertInstallCommands, GzipFileResult, GzipMode, MapLocalSaveInput, MockRule, MonitorMode, ProxyStatus, RedirectRule, RenderContext, ReplayRequest, RuleAction, RuleInput, RulePatch, ScannedImage, Scenario, Settings, TrafficEvent, WebpWriteResult } from './types';
 
 export interface Api {
   proxyStart(): Promise<void>;
@@ -39,6 +39,11 @@ export interface Api {
   rulesResetSequence(ruleId: string): Promise<void>;
   maplocalSave(input: MapLocalSaveInput): Promise<string>;
   openFileDialog(): Promise<string | null>;
+  openDirectoryDialog(): Promise<string | null>;
+  gzipFile(mode: GzipMode, inputPath: string): Promise<GzipFileResult>;
+  scanImages(dir: string): Promise<ScannedImage[]>;
+  readImage(dir: string, relPath: string): Promise<Uint8Array>;
+  writeWebp(outDir: string, outName: string, bytes: Uint8Array): Promise<WebpWriteResult>;
   adbStatus(): Promise<AdbStatus>;
   adbSetupTunnel(): Promise<AdbOpResult>;
   adbSetPhoneProxy(): Promise<AdbOpResult>;
