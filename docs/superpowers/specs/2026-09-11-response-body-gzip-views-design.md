@@ -37,10 +37,12 @@
 | 单元 | 职责 | 依赖 |
 |---|---|---|
 | `src/renderer/src/lib/body-codec.ts`（新增） | 全部字节逻辑：gzip 嗅探、压缩/解压、hex dump、base64 编解码、压缩率计算 | 仅使用全局 `CompressionStream` / `DecompressionStream` / `TextEncoder` / `atob` / `btoa`；不依赖 React、IPC、store、DOM |
-| `src/renderer/src/components/TrafficDetail.tsx`（修改） | 视图 tab 状态、懒计算调度、渲染、复制交互 | 调用 body-codec，自身不含任何字节运算 |
+| `src/renderer/src/lib/body-format.ts`（新增） | 承接从 `TrafficDetail.tsx` 移出的 `pretty()`：JSON 美化 + 500_000 字符显示截断 | 无 |
+| `src/renderer/src/components/ResponseBodyViews.tsx`（新增） | 响应体视图状态机：tab 切换、懒计算调度、就地错误展示、复制交互 | 调用 body-codec 与 body-format，自身不含任何字节运算 |
+| `src/renderer/src/components/TrafficDetail.tsx`（修改） | 「响应体」小节改为渲染 `ResponseBodyViews`，不再自持响应体展示逻辑；请求体仍用 `pretty()` | — |
 | `src/renderer/src/styles.css`（修改） | 复用现有 `.body-tabs` / `.tab` / `.tab.active` 视觉，新增一行 tab + 按钮的容器样式 | — |
 
-划分理由：body-codec 不依赖 DOM 与 React，vitest 的 `environment: 'node'`（Node 24 已全局提供 `CompressionStream` / `DecompressionStream`）可直接完整覆盖；`TrafficDetail` 只保留「何时计算、算完显示什么」，阅读时无需理解 gzip 细节。
+划分理由：body-codec 不依赖 DOM 与 React，vitest 的 `environment: 'node'`（Node 24 已全局提供 `CompressionStream` / `DecompressionStream`，且 `@types/node` 26 以「DOM lib 存在时让位」的条件类型声明了同名全局）可直接完整覆盖；`pretty()` 独立成 lib 是因为原始视图与解压视图都要用它做显示美化，留在 `TrafficDetail` 内会造成重复；响应体视图有独立的状态机（3 个视图 × 各自的异步计算状态），抽成组件后 `TrafficDetail` 维持在原有体量。
 
 ## 4. body-codec 接口与规则
 
@@ -145,7 +147,7 @@ export function toBase64(bytes: Uint8Array): string;
 ## 6. 性能与截断
 
 - **懒计算**：仅在首次切到某 tab 时计算，结果按 `event.id` + tab 缓存于组件 state；`event.id` 变化即丢弃
-- **压缩输入上限 5 MiB**（按 `TextEncoder` 编码后的字节数判定）。超出则压缩 tab 置灰，内容区显示「响应体过大（X.X MB），不支持压缩查看」
+- **压缩输入上限 5 MiB**（按 `TextEncoder` 编码后的字节数判定）。该判定属懒计算的一部分，只能在首次激活压缩 tab 时得出，因此超限不表现为 tab 置灰，而是内容区显示「响应体过大（X.X MB），不支持压缩查看」；压缩 tab 仅在响应体为空时置灰
 - **hex dump 渲染上限 4 KiB**（256 行）。`toHexDump(bytes, 4096)` 用于渲染；复制走无 `maxBytes` 的完整输出
 - 原始/解压文本渲染继续沿用 `pretty()` 的 500_000 字符截断，复制不截断
 
@@ -156,6 +158,7 @@ export function toBase64(bytes: Uint8Array): string;
 | `gunzipText` 抛错（raw-bytes 有损、gzip 流不完整） | 解压 tab 内容区就地显示红色错误行「gzip 解压失败：{message}」，不冒泡、不影响其他 tab |
 | `gzipCompress` 抛错 | 压缩 tab 内容区就地显示「gzip 压缩失败：{message}」 |
 | 嗅探未命中 | 解压 tab `disabled`，内容区「未检测到 gzip 内容」 |
+| 响应体超过 5 MiB | 压缩 tab 仍可点击，内容区显示「响应体过大（X.X MB），不支持压缩查看」，不执行压缩 |
 | 响应体为空 | 解压与压缩 tab 均 `disabled`，原始 tab 显示「（无）」 |
 | clipboard 写入被拒 | 沿用现有 try/catch，按钮不进入「已复制」态，无额外提示 |
 
@@ -164,7 +167,7 @@ export function toBase64(bytes: Uint8Array): string;
 ## 8. 回归面
 
 - 不改 `TrafficEvent` 结构与任何 main 进程代码，HAR 导入/导出、转为规则、转为 MapLocal、重放、Compose 全部不受影响
-- `pretty()` 函数签名与行为不变，请求体区域渲染不变
+- `pretty()` 从 `TrafficDetail.tsx` 迁移到 `lib/body-format.ts`，签名与行为不变（纯位置迁移），请求体区域渲染结果等价
 - 仅新增渲染派生视图，代理与规则引擎行为零变更
 
 ## 9. 测试
@@ -177,6 +180,10 @@ export function toBase64(bytes: Uint8Array): string;
 - hex dump：首行偏移与分组格式、末行不足 16 字节的对齐、不可打印字符在 ASCII 侧栏为 `.`、`maxBytes` 截断标记、空输入返回空串
 - base64：> 64 KiB 输入不抛错且结果可解码回原字节
 - 压缩率：`ratio` 计算、`rawBytes` 为 0 时取 0
+
+### 单测 `tests/body-format.test.ts`（vitest / node）
+
+- `pretty()`：合法 JSON 两空格缩进美化、非法 JSON 原样返回、超过 500_000 字符截断并追加提示行、`undefined` 与空串返回空串
 
 ### E2E `e2e/traffic-body-views.spec.ts`（playwright + 真 Electron）
 
