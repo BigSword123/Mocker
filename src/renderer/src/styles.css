@@ -523,3 +523,35 @@ table.kv .k { color: #8ab4ff; width: 200px; }
   padding: 0;
   line-height: 1;
 }
+
+.body-view-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0;
+}
+.body-view-bar .body-tabs {
+  margin-bottom: 0;
+}
+.body-tabs .tab:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.body-view-actions {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+.body-view-actions button {
+  font-size: 12px;
+  padding: 3px 10px;
+}
+.body-view-actions button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.body-gzip-stats {
+  font-size: 12px;
+  color: #8a8b96;
+  margin: 4px 0;
+}
