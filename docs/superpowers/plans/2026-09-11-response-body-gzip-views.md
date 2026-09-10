@@ -39,6 +39,17 @@
 
 组件层没有单测基础设施（仓库无 jsdom / testing-library，既有组件一律靠 e2e 覆盖），因此 `ResponseBodyViews` 的正确性由 Task 7 的 e2e 保证，这符合仓库现状。
 
+## 跨 spec 协调（执行前必读）
+
+同日的 `docs/superpowers/specs/2026-09-11-utility-tools-design.md`（实用工具面板，由并行会话产出，commit `6711531` / `9f25c9c` / `b2a23b9`）的 gzip 文本模式**直接复用本计划 Task 2-4 产出的 `src/renderer/src/lib/body-codec.ts`**，并声明两份 spec 共用同一份 `tests/body-codec.test.ts`。
+
+由此产生两条执行约束：
+
+1. **`body-codec.ts` 是共享契约，不是本功能的私有实现。** 它的导出名与返回结构（`sniffGzip` / `gzipDecodeBytes` / `gunzipText` / `gzipCompress` / `toHexDump` / `toBase64`，以及 `CompressResult.bytes`、`GzipVia`）已被另一份 spec 按当前版本引用。执行本计划时**不得**为了 `ResponseBodyViews` 的临时便利重塑这些接口（例如把 `bytes` 换回预生成的 `hex` / `base64` 字符串、改函数名、改嗅探语义）。确有调整需要时，先改两份 spec 再改代码。
+2. **两个会话不要同时实现。** 两边都会新建 `src/renderer/src/lib/body-codec.ts` 与 `tests/body-codec.test.ts`，并行开工必然冲突。本计划是那条依赖链的上游，应先执行；实用工具面板的 gzip 文本模式排在 Task 4 完成之后。
+
+`src/main/tools/gzip.ts`（文件模式，主进程 Node `zlib`）与本计划无交集，不受影响。
+
 ---
 
 ### Task 1: 把 `pretty()` 迁到 `lib/body-format.ts`
