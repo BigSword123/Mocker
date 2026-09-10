@@ -315,7 +315,7 @@ export function registerIpc(ctx: IpcContext): void {
 整体替换为：
 
 ```ts
-  const setSettings = (patch: Partial<Settings>): Settings => {
+  const setSettings = async (patch: Partial<Settings>): Promise<Settings> => {
     if (patch.proxyPort !== undefined) {
       if (!Number.isInteger(patch.proxyPort) || patch.proxyPort < 1 || patch.proxyPort > 65535) {
         throw new Error('代理端口必须是 1-65535 的整数');
@@ -340,7 +340,7 @@ export function registerIpc(ctx: IpcContext): void {
   ipcMain.handle('settings:apply', (_e, patch: Partial<Settings>) =>
     applySettings(patch, {
       systemProxyOwnedByUs: ctx.systemProxySetByUs,
-      settingsSet: async (p) => setSettings(p),
+      settingsSet: setSettings,
       proxyStop: stopProxy,
       proxyStart: startProxy,
       enableSystemProxy: async () => {
@@ -350,6 +350,8 @@ export function registerIpc(ctx: IpcContext): void {
     }),
   );
 ```
+
+`setSettings` 必须是 `async` 且返回 `Promise<Settings>`：`SettingsStore.set` 本身是异步的（`settings-store.ts:27`）。写成同步返回 `Settings` 会在 `npm run typecheck` 报 TS2740。改成异步后它的形状正好等于 `ApplySettingsDeps.settingsSet`，可以直接传引用，不用再包一层箭头函数。
 
 `settings:apply` 复用 `setSettings`，因此端口/限速/上游/monitorMode 的校验一条都不会绕过；校验失败时 `applySettings` 在快照归属之前就抛出，不会重启代理。
 

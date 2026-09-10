@@ -18,6 +18,7 @@ import type { RenderContext, ReplayRequest, RuleAction, RuleInput, RulePatch, Se
 import type { OpenDialogOptions, SaveDialogOptions } from 'electron';
 import { AdbService } from './adb/adb-service';
 import { applyMonitorMode } from './monitor-mode';
+import { applySettings } from './apply-settings';
 import { validateUpstreamProxyUrl } from '../shared/upstream';
 import { validateAction } from './rules/validate';
 import { assertValidThrottle } from './proxy/throttle';
@@ -49,13 +50,14 @@ export function localIps(): string[] {
 }
 
 export function registerIpc(ctx: IpcContext): void {
-  ipcMain.handle('proxy:start', async () => {
+  const startProxy = async (): Promise<void> => {
     await ctx.proxy.start();
     ctx.history.openSession();
     // Best-effort cleanup of stale session files; never fail start over it.
     await ctx.history.prune().catch(() => {});
-  });
-  ipcMain.handle('proxy:stop', async () => {
+  };
+
+  const stopProxy = async (): Promise<void> => {
     // Restore the OS proxy first while the proxy still serves, so traffic is
     // never routed at a dead port. Only our own setting is ours to undo.
     if (ctx.systemProxySetByUs()) {
@@ -68,7 +70,10 @@ export function registerIpc(ctx: IpcContext): void {
     }
     await ctx.proxy.stop();
     await ctx.history.closeSession();
-  });
+  };
+
+  ipcMain.handle('proxy:start', startProxy);
+  ipcMain.handle('proxy:stop', stopProxy);
   ipcMain.handle('proxy:status', () => ({
     running: ctx.proxy.running,
     port: ctx.proxy.port,
@@ -103,8 +108,8 @@ export function registerIpc(ctx: IpcContext): void {
   ipcMain.handle('adb:setup-tunnel', () => ctx.adb.setupTunnel(ctx.settings.get().proxyPort));
   ipcMain.handle('adb:set-phone-proxy', () => ctx.adb.setPhoneProxy(ctx.settings.get().proxyPort));
   ipcMain.handle('adb:clear-phone-proxy', () => ctx.adb.clearPhoneProxy());
-  ipcMain.handle('settings:get', () => ctx.settings.get());
-  ipcMain.handle('settings:set', (_e, patch: Partial<Settings>) => {
+
+  const setSettings = async (patch: Partial<Settings>): Promise<Settings> => {
     if (patch.proxyPort !== undefined) {
       if (!Number.isInteger(patch.proxyPort) || patch.proxyPort < 1 || patch.proxyPort > 65535) {
         throw new Error('代理端口必须是 1-65535 的整数');
@@ -122,7 +127,22 @@ export function registerIpc(ctx: IpcContext): void {
       throw new Error('monitorMode 必须是 off/phone/computer');
     }
     return ctx.settings.set(patch);
-  });
+  };
+
+  ipcMain.handle('settings:get', () => ctx.settings.get());
+  ipcMain.handle('settings:set', (_e, patch: Partial<Settings>) => setSettings(patch));
+  ipcMain.handle('settings:apply', (_e, patch: Partial<Settings>) =>
+    applySettings(patch, {
+      systemProxyOwnedByUs: ctx.systemProxySetByUs,
+      settingsSet: setSettings,
+      proxyStop: stopProxy,
+      proxyStart: startProxy,
+      enableSystemProxy: async () => {
+        await enableSystemProxy(ctx.proxy.port);
+        ctx.onSystemProxyChanged(true);
+      },
+    }),
+  );
 
   ipcMain.handle('cert:info', () => ({ expiresAt: ctx.ca.notAfter.getTime() }));
   ipcMain.handle('cert:install-commands', () => buildCertInstallCommands(ctx.dataDir));
