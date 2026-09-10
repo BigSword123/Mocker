@@ -99,9 +99,15 @@ IPC 开销实测评估：200 张 1MB 图片额外复制约 200MB，摊到全程�
 
 同日另一份设计 `2026-09-11-response-body-gzip-views-design.md`（状态「已确认，待实现」）已在流量详情面板引入 `src/renderer/src/lib/body-codec.ts`，提供 `gzipCompress` / `gunzipText` / `toBase64` / `toHexDump` / `sniffGzip`，纯渲染进程、不依赖 IPC。
 
-本工具的文本模式**直接调用它**，不新增任何 gzip 字节逻辑，也不新增 IPC。文本模式行为：`compress` 读文本 → 输出 base64；`decompress` 读 base64 → 输出文本；解压结果非法 UTF-8 时（`gunzipText` 用 `TextDecoder(fatal: true)`）就地报错并保留 base64 供复制。
+本工具的文本模式**直接调用它**，不新增任何 gzip 字节逻辑，也不新增 IPC。
 
-**落地顺序依赖**：`body-codec.ts` 目前尚未实现。实现本工具前需先落地它——要么先做完那份 spec，要么把 `body-codec.ts` 作为本次工作的第一步产出（两份 spec 共用同一个模块与同一份 `tests/body-codec.test.ts`）。这一点必须在实现计划里显式排序，否则文本模式无地基。
+**契约细节（以姊妹 spec 当前版本为准，该文件仍在被并发修订）**：
+
+- `gzipCompress(text)` 返回 `{ rawBytes, gzippedBytes, ratio, bytes }`，**不预生成 base64**。文本模式需自行 `toBase64(result.bytes)` 得到输出。
+- `decompress` 读 base64 → `gzipDecodeBytes` → `gunzipText` 得到文本；`gunzipText` 内部用 `TextDecoder(fatal: true)`，非法 UTF-8 会抛错，此时就地报错并保留输入的 base64 供复制。
+- **空 message 陷阱（姊妹 spec 已实测）**：`DecompressionStream` 解压失败抛出的是 `message` 为空字符串的 `TypeError`。错误文案必须按 `e.message` → `e.name` → `String(e)` 顺序回退，否则会渲染成「gzip 解压失败：」后面一片空白。本工具的文本模式与 WebP 批量结果表都适用此规则。
+
+**落地顺序依赖**：`body-codec.ts` 目前尚未实现，且其契约仍在被另一会话修订。实现本工具前需先让它落地并冻结接口——要么先做完那份 spec，要么把 `body-codec.ts` 作为本次工作的第一步产出（两份 spec 共用同一个模块与同一份 `tests/body-codec.test.ts`）。这一点必须在实现计划里显式排序，否则文本模式无地基。
 
 ### 4.2 文件模式：主进程 Node zlib
 
