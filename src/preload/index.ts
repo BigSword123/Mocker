@@ -15,6 +15,7 @@ const api: Api = {
     ipcRenderer.invoke('template:preview', payload),
   settingsGet: () => ipcRenderer.invoke('settings:get'),
   settingsSet: (patch: Partial<Settings>) => ipcRenderer.invoke('settings:set', patch),
+  settingsApply: (patch: Partial<Settings>) => ipcRenderer.invoke('settings:apply', patch),
   certInfo: () => ipcRenderer.invoke('cert:info'),
   certInstallCommands: () => ipcRenderer.invoke('cert:install-commands'),
   systemProxySet: (enabled: boolean) => ipcRenderer.invoke('system-proxy:set', enabled),

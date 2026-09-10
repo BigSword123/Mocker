@@ -16,6 +16,8 @@ export interface Api {
   }): Promise<{ rendered: string; warnings: string[] }>;
   settingsGet(): Promise<Settings>;
   settingsSet(patch: Partial<Settings>): Promise<Settings>;
+  /** 保存设置并重启代理；系统代理若由 mocker 设置，重启后自动重设 */
+  settingsApply(patch: Partial<Settings>): Promise<Settings>;
   certInfo(): Promise<CertInfo>;
   certInstallCommands(): Promise<CertInstallCommands>;
   systemProxySet(enabled: boolean): Promise<void>;
