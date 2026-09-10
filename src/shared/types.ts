@@ -248,3 +248,13 @@ export interface AdbOpResult {
   ok: boolean;
   message: string;
 }
+
+export interface ScannedImage {
+  /** POSIX 风格相对路径，如 `sub/a.png` */
+  relPath: string;
+  /** 小写扩展名含点，如 `.png` */
+  ext: string;
+  size: number;
+  /** 相对输出目录的写入名，如 `sub/a.webp`；同目录撞名时为 `sub/a.png.webp` */
+  outName: string;
+}
