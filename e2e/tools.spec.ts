@@ -340,3 +340,18 @@ test('gzip 文本模式：数据被截断时报错且文案非空', async () => 
   await expect(err).toBeVisible();
   expect(((await err.textContent()) ?? '').trim().length).toBeGreaterThan(0);
 });
+
+test('时间戳「现在」按钮：填入当前毫秒且正反向自洽', async () => {
+  await win.getByTestId('tools-tab').click();
+  await win.getByTestId('tool-tab-timestamp').click();
+  await win.getByTestId('ts-zone').selectOption('Asia/Shanghai');
+  await win.getByTestId('ts-unit').selectOption('ms');
+
+  await win.getByTestId('ts-now').click();
+  const ts = await win.getByTestId('ts-input').inputValue();
+  expect(Math.abs(Number(ts) - Date.now())).toBeLessThan(5000);
+
+  // 标准时间由 formatTimestamp 产出，dt-ms 由 parseZonedDateTime 反解，两者必须回到同一个
+  // 毫秒值。不写死期望值，换时区或换实现都成立
+  await expect(win.getByTestId('dt-ms')).toHaveText(ts);
+});

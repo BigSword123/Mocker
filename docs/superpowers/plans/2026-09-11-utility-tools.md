@@ -2442,7 +2442,7 @@ gzip。gzipCompress 返回原始 bytes，base64 由调用方 toBase64 组合。
 **Files:**
 - Modify: `README.md`
 
-- [ ] **Step 1: 确认与对方会话的 README 改动不冲突**
+- [x] **Step 1: 确认与对方会话的 README 改动不冲突**
 
 Run:
 
@@ -2454,7 +2454,7 @@ grep -n "^### " README.md
 
 若 `README.md` 已有未提交改动（对方 Task 8 正在改），**先让对方提交**，或 `git stash push README.md` 暂存后再改，改完 `git stash pop` 手工合并。不要直接覆盖。
 
-- [ ] **Step 2: 加「实用工具」小节**
+- [x] **Step 2: 加「实用工具」小节**
 
 在 `README.md` 的 `### 弱网限速`（第 263 行附近）之后、`## 开发`（第 271 行）之前插入一个**独立小节**，不动其它小节内容：
 
@@ -2480,7 +2480,7 @@ grep -n "^### " README.md
 单张失败只会记在明细表里标红，不中断整批。
 ```
 
-- [ ] **Step 3: 更新功能列表**
+- [x] **Step 3: 更新功能列表**
 
 `README.md` 的 `## 功能`（第 5 行）列表末尾追加一行：
 
@@ -2488,7 +2488,7 @@ grep -n "^### " README.md
 - 实用工具：时间戳互转（任意时区）、gzip 压缩/解压、png/jpg 批量转 WebP
 ```
 
-- [ ] **Step 4: 全量校验**
+- [x] **Step 4: 全量校验**
 
 Run:
 
@@ -2504,7 +2504,7 @@ Run: `npm run dev`
 
 按顺序点一遍：时间戳（正反向 + 换时区 + 「现在」按钮）、gzip（文件模式压缩解压 + 文本模式往返）、WebP（批量转换 + 改质量重跑）。确认 tab 顺序是 流量 / 规则 / 重定向 / 实用工具 / 设备接入 / 设置。
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ```bash
 git status --short
