@@ -149,3 +149,13 @@ test('能力验证：gzip 通道已接线且主进程错误跨 IPC 传回', asyn
     await fs.rm(dir, { recursive: true, force: true });
   }
 });
+
+test('gzip 工具：未选文件时两个操作按钮禁用', async () => {
+  await win.getByTestId('tools-tab').click();
+  await win.getByTestId('tool-tab-gzip').click();
+
+  await expect(win.getByTestId('gzip-compress')).toBeDisabled();
+  await expect(win.getByTestId('gzip-decompress')).toBeDisabled();
+  // toHaveText 对 <input> 恒真（textContent 总是空串），必须断言 value
+  await expect(win.getByTestId('gzip-path')).toHaveValue('');
+});

@@ -1,9 +1,13 @@
 import { useState } from 'react';
 import TimestampTool from './TimestampTool';
+import GzipTool from './GzipTool';
 
-type ToolKey = 'timestamp';
+type ToolKey = 'timestamp' | 'gzip';
 
-const TOOLS: { key: ToolKey; label: string }[] = [{ key: 'timestamp', label: '时间戳' }];
+const TOOLS: { key: ToolKey; label: string }[] = [
+  { key: 'timestamp', label: '时间戳' },
+  { key: 'gzip', label: 'gzip' },
+];
 
 export default function ToolsPanel() {
   const [tool, setTool] = useState<ToolKey>('timestamp');
@@ -23,6 +27,7 @@ export default function ToolsPanel() {
         ))}
       </div>
       {tool === 'timestamp' && <TimestampTool />}
+      {tool === 'gzip' && <GzipTool />}
     </div>
   );
 }
