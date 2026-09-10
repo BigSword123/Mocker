@@ -81,7 +81,7 @@
 - Create: `src/renderer/src/lib/datetime.ts`
 - Test: `tests/datetime.test.ts`
 
-- [ ] **Step 1: 写失败的测试**
+- [x] **Step 1: 写失败的测试**
 
 创建 `tests/datetime.test.ts`：
 
@@ -287,12 +287,12 @@ describe('listTimeZones', () => {
 });
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 Run: `npx vitest run tests/datetime.test.ts`
 Expected: FAIL — `Cannot find module '../src/renderer/src/lib/datetime'`
 
-- [ ] **Step 3: 建实现文件**
+- [x] **Step 3: 建实现文件**
 
 创建 `src/renderer/src/lib/datetime.ts`。**此文件不得引用任何 DOM API**（会被 `tests/**` 间接拉进无 DOM lib 的 node typecheck）：
 
@@ -440,17 +440,17 @@ export function listTimeZones(): ZoneOption[] {
 }
 ```
 
-- [ ] **Step 4: 跑测试确认通过**
+- [x] **Step 4: 跑测试确认通过**
 
 Run: `npx vitest run tests/datetime.test.ts`
 Expected: PASS，全部 test 通过（`listTimeZones` 那条断言 419 项）
 
-- [ ] **Step 5: 跑 typecheck 确认 datetime.ts 在无 DOM lib 下也干净**
+- [x] **Step 5: 跑 typecheck 确认 datetime.ts 在无 DOM lib 下也干净**
 
 Run: `npm run typecheck`
 Expected: 两个 tsconfig 均无报错。若报 `OffscreenCanvas` / `Blob` 之类找不到，说明误加了 DOM API
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ```bash
 git status --short
@@ -472,7 +472,7 @@ supportedValuesOf 不含任何 UTC 条目，显式并入。"
 - Modify: `src/renderer/src/App.tsx:11,28,35`
 - Test: `e2e/tools.spec.ts`（创建，本 Task 只写 tab 顺序与时间戳两块）
 
-- [ ] **Step 1: 写失败的 e2e**
+- [x] **Step 1: 写失败的 e2e**
 
 创建 `e2e/tools.spec.ts`：
 
@@ -551,12 +551,12 @@ test('非法输入行内报错且不崩', async () => {
 });
 ```
 
-- [ ] **Step 2: 跑 e2e 确认失败**
+- [x] **Step 2: 跑 e2e 确认失败**
 
 Run: `npx playwright test e2e/tools.spec.ts`
 Expected: FAIL — `waitForSelector('[data-testid="tools-tab"]')` 超时（tab 尚不存在）
 
-- [ ] **Step 3: 改 App.tsx 接线 tab**
+- [x] **Step 3: 改 App.tsx 接线 tab**
 
 `src/renderer/src/App.tsx` 三处改动。第 11 行：
 
@@ -582,7 +582,7 @@ import ToolsPanel from './components/ToolsPanel';
         {tab === 'tools' && <ToolsPanel />}
 ```
 
-- [ ] **Step 4: 建 ToolsPanel.tsx**
+- [x] **Step 4: 建 ToolsPanel.tsx**
 
 创建 `src/renderer/src/components/ToolsPanel.tsx`。本 Task 只挂时间戳一项，gzip 与 webp 分别在 Task 7 / Task 8 追加（避免造占位组件）：
 
@@ -617,7 +617,7 @@ export default function ToolsPanel() {
 }
 ```
 
-- [ ] **Step 5: 建 TimestampTool.tsx**
+- [x] **Step 5: 建 TimestampTool.tsx**
 
 创建 `src/renderer/src/components/TimestampTool.tsx`。两个方向各自独立受控，改一边同步另一边（单向写入，不成环）：
 
@@ -798,22 +798,22 @@ export default function TimestampTool() {
 }
 ```
 
-- [ ] **Step 6: 跑 typecheck**
+- [x] **Step 6: 跑 typecheck**
 
 Run: `npm run typecheck`
 Expected: 无报错
 
-- [ ] **Step 7: 跑 e2e 确认通过**
+- [x] **Step 7: 跑 e2e 确认通过**
 
 Run: `npm run test:e2e -- e2e/tools.spec.ts`
 Expected: PASS，5 个 test 全绿
 
-- [ ] **Step 8: 跑全量单测确认无回归**
+- [x] **Step 8: 跑全量单测确认无回归**
 
 Run: `npm test`
 Expected: PASS（含 Task 1 的 datetime 与既有全部测试）
 
-- [ ] **Step 9: 提交**
+- [x] **Step 9: 提交**
 
 ```bash
 git status --short
@@ -832,7 +832,7 @@ git commit -m "feat(ui): utility tools tab with timezone timestamp converter
 - Create: `src/main/tools/image-scan.ts`
 - Test: `tests/image-scan.test.ts`
 
-- [ ] **Step 1: 写失败的测试**
+- [x] **Step 1: 写失败的测试**
 
 创建 `tests/image-scan.test.ts`：
 
@@ -959,12 +959,12 @@ describe('writeWebp', () => {
 });
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 Run: `npx vitest run tests/image-scan.test.ts`
 Expected: FAIL — `Cannot find module '../src/main/tools/image-scan'`
 
-- [ ] **Step 3: 建实现文件**
+- [x] **Step 3: 建实现文件**
 
 创建 `src/main/tools/image-scan.ts`：
 
@@ -1046,7 +1046,7 @@ export async function writeWebp(outDir: string, outName: string, bytes: Uint8Arr
 }
 ```
 
-- [ ] **Step 4: 跑测试确认通过**
+- [x] **Step 4: 跑测试确认通过**
 
 Run: `npx vitest run tests/image-scan.test.ts`
 Expected: PASS
@@ -1067,12 +1067,12 @@ export interface ScannedImage {
 }
 ```
 
-- [ ] **Step 5: 跑 typecheck**
+- [x] **Step 5: 跑 typecheck**
 
 Run: `npm run typecheck`
 Expected: 无报错
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ```bash
 git status --short
@@ -1094,7 +1094,7 @@ dir 与 relPath 来自渲染进程 IPC，读写前都校验落在目录内。"
 - Test: `tests/gzip.test.ts`
 - Test: `tests/format-bytes.test.ts`
 
-- [ ] **Step 1: 写失败的测试**
+- [x] **Step 1: 写失败的测试**
 
 创建 `tests/gzip.test.ts`：
 
@@ -1215,12 +1215,12 @@ describe('formatRatio', () => {
 });
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 Run: `npx vitest run tests/gzip.test.ts tests/format-bytes.test.ts`
 Expected: FAIL — 两个模块都找不到
 
-- [ ] **Step 3: 建实现文件**
+- [x] **Step 3: 建实现文件**
 
 创建 `src/main/tools/gzip.ts`：
 
@@ -1278,19 +1278,19 @@ export function formatRatio(out: number, input: number): string {
 }
 ```
 
-- [ ] **Step 4: 跑测试确认通过**
+- [x] **Step 4: 跑测试确认通过**
 
 Run: `npx vitest run tests/gzip.test.ts tests/format-bytes.test.ts`
 Expected: PASS
 
 若 `formatBytes(12345)` 断言失败，核对：12345/1024 = 12.055 → `12.1 KB`。
 
-- [ ] **Step 5: 跑 typecheck**
+- [x] **Step 5: 跑 typecheck**
 
 Run: `npm run typecheck`
 Expected: 无报错
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ```bash
 git status --short
@@ -1315,7 +1315,7 @@ git commit -m "feat(main): async gzip with magic check and decompression cap
 - Modify: `src/main/ipc.ts`
 - Test: `e2e/tools.spec.ts`（追加）
 
-- [ ] **Step 1: 写失败的 e2e（能力验证）**
+- [x] **Step 1: 写失败的 e2e（能力验证）**
 
 在 `e2e/tools.spec.ts` 末尾追加。文件顶部 import 改为：
 
@@ -1423,12 +1423,12 @@ test('openDirectoryDialog 取消时返回 null 而非抛错', async () => {
 });
 ```
 
-- [ ] **Step 2: 跑 e2e 确认失败**
+- [x] **Step 2: 跑 e2e 确认失败**
 
 Run: `npx playwright test e2e/tools.spec.ts`
 Expected: FAIL — `window.api.scanImages is not a function`（原有 5 个 test 仍应 PASS）
 
-- [ ] **Step 3: 追加 shared 类型**
+- [x] **Step 3: 追加 shared 类型**
 
 在 `src/shared/types.ts` 末尾追加（`ScannedImage` 已在 Task 3 加过，不要重复）：
 
@@ -1449,7 +1449,7 @@ export interface WebpWriteResult {
 }
 ```
 
-- [ ] **Step 4: 扩展 Api 接口**
+- [x] **Step 4: 扩展 Api 接口**
 
 `src/shared/api.ts`：第 1 行 import 追加类型：
 
@@ -1467,7 +1467,7 @@ import type { AdbOpResult, AdbStatus, CertInfo, CertInstallCommands, GzipFileRes
   writeWebp(outDir: string, outName: string, bytes: Uint8Array): Promise<WebpWriteResult>;
 ```
 
-- [ ] **Step 5: 加 preload 桥接**
+- [x] **Step 5: 加 preload 桥接**
 
 `src/preload/index.ts`：第 3 行 import 追加 `GzipMode`：
 
@@ -1486,7 +1486,7 @@ import type { AdbOpResult, AdbStatus, GzipMode, MonitorMode, RedirectRule, Rende
     ipcRenderer.invoke('tools:write-webp', outDir, outName, bytes),
 ```
 
-- [ ] **Step 6: 注册 main handler**
+- [x] **Step 6: 注册 main handler**
 
 `src/main/ipc.ts`：顶部 import 区追加：
 
@@ -1538,12 +1538,12 @@ import type { GzipMode } from '../shared/types';
   );
 ```
 
-- [ ] **Step 7: 跑 typecheck**
+- [x] **Step 7: 跑 typecheck**
 
 Run: `npm run typecheck`
 Expected: 无报错。若 `Api` 接口与 preload 实现不匹配会在此暴露
 
-- [ ] **Step 8: 跑 e2e 确认通过**
+- [x] **Step 8: 跑 e2e 确认通过**
 
 Run: `npm run test:e2e -- e2e/tools.spec.ts`
 Expected: PASS，9 个 test 全绿
@@ -1552,12 +1552,12 @@ Expected: PASS，9 个 test 全绿
 
 **若「Chromium canvas 能编出合法 WebP」失败**：说明该 Electron 构建未启用 WebP 编码，零依赖方案不成立。停止后续 Task，回到 spec 的「WebP 编码引擎」一节改选 `sharp`，并重新评估安装体积与镜像问题。
 
-- [ ] **Step 9: 跑全量单测与全量 e2e 确认无回归**
+- [x] **Step 9: 跑全量单测与全量 e2e 确认无回归**
 
 Run: `npm test && npm run test:e2e`
 Expected: PASS。`ipc.ts` 改动涉及既有 handler 注册，务必跑全量 e2e
 
-- [ ] **Step 10: 提交**
+- [x] **Step 10: 提交**
 
 ```bash
 git status --short
@@ -1581,7 +1581,7 @@ Chromium canvas 能编出带 RIFF/WEBP 魔数的合法产物。PNG 夹具由渲�
 
 **没有 vitest 单测，这是刻意的**：`webp.ts` 用了 `OffscreenCanvas` / `createImageBitmap` / `Blob`，而 `tests/**` 属 `tsconfig.node.json`（`types: ["node"]`，无 DOM lib）。一旦被 `tests/**` import，`npm run typecheck` 必挂。该模块只由 Task 8 的 e2e 覆盖。
 
-- [ ] **Step 1: 建实现文件**
+- [x] **Step 1: 建实现文件**
 
 创建 `src/renderer/src/lib/webp.ts`：
 
@@ -1641,19 +1641,19 @@ export async function encodeWebp(bytes: Uint8Array, quality: number): Promise<We
 }
 ```
 
-- [ ] **Step 2: 跑 typecheck**
+- [x] **Step 2: 跑 typecheck**
 
 Run: `npm run typecheck`
 Expected: 无报错。`tsconfig.web.json` 的 `lib: ["ES2022","DOM","DOM.Iterable"]` 提供 `OffscreenCanvas` / `ImageBitmap` 类型
 
 若报 `Uint8Array<ArrayBufferLike>` 不能赋给 `BlobPart`，说明需要保留 Step 1 里 `new Uint8Array(bytes)` 那次复制，不要图省事去掉。
 
-- [ ] **Step 3: 确认没有测试文件误 import 它**
+- [x] **Step 3: 确认没有测试文件误 import 它**
 
 Run: `grep -rn "lib/webp" tests/ || echo "OK: tests/ 未引用 webp.ts"`
 Expected: `OK: tests/ 未引用 webp.ts`
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 git status --short
@@ -1674,7 +1674,7 @@ lib，被 tests/ 引用会让 node tsconfig 的 typecheck 失败，改由 e2e �
 - Modify: `src/renderer/src/components/ToolsPanel.tsx`
 - Test: `e2e/tools.spec.ts`（追加）
 
-- [ ] **Step 1: 写失败的 e2e**
+- [x] **Step 1: 写失败的 e2e**
 
 在 `e2e/tools.spec.ts` 末尾追加：
 
@@ -1704,12 +1704,12 @@ test('gzip 工具：文件模式错误经 IPC 冒泡到界面', async () => {
 });
 ```
 
-- [ ] **Step 2: 跑 e2e 确认失败**
+- [x] **Step 2: 跑 e2e 确认失败**
 
 Run: `npx playwright test e2e/tools.spec.ts -g "gzip 工具"`
 Expected: FAIL — `tool-tab-gzip` 找不到
 
-- [ ] **Step 3: 建 GzipTool.tsx**
+- [x] **Step 3: 建 GzipTool.tsx**
 
 创建 `src/renderer/src/components/GzipTool.tsx`。本 Task 只做文件模式，文本模式在 Task 9 追加：
 
@@ -1811,7 +1811,7 @@ export default function GzipTool() {
 }
 ```
 
-- [ ] **Step 4: ToolsPanel 挂上 gzip**
+- [x] **Step 4: ToolsPanel 挂上 gzip**
 
 `src/renderer/src/components/ToolsPanel.tsx` 三处改动：
 
@@ -1838,12 +1838,12 @@ const TOOLS: { key: ToolKey; label: string }[] = [
       {tool === 'gzip' && <GzipTool />}
 ```
 
-- [ ] **Step 5: 跑 typecheck**
+- [x] **Step 5: 跑 typecheck**
 
 Run: `npm run typecheck`
 Expected: 无报错
 
-- [ ] **Step 6: 跑 e2e 确认通过**
+- [x] **Step 6: 跑 e2e 确认通过**
 
 Run: `npm run test:e2e -- e2e/tools.spec.ts`
 Expected: PASS，11 个 test 全绿
@@ -1861,7 +1861,7 @@ Run: `npm run dev`
 
 确认后关掉 dev。
 
-- [ ] **Step 8: 提交**
+- [x] **Step 8: 提交**
 
 ```bash
 git status --short
