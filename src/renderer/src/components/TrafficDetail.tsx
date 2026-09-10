@@ -1,19 +1,9 @@
 import { useEffect, useState } from 'react';
 import type { TrafficEvent } from '../../../shared/types';
 import { api } from '../lib/api';
+import { pretty } from '../lib/body-format';
 import { buildCurl, defaultDialectFor, type CurlDialect } from '../lib/curl';
-
-function pretty(body: string | undefined): string {
-  if (!body) return '';
-  if (body.length > 500_000) {
-    return body.slice(0, 500_000) + '\n…（内容过长已截断）';
-  }
-  try {
-    return JSON.stringify(JSON.parse(body), null, 2);
-  } catch {
-    return body;
-  }
-}
+import ResponseBodyViews from './ResponseBodyViews';
 
 function HeaderTable({ headers }: { headers?: Record<string, string> }) {
   if (!headers || Object.keys(headers).length === 0) return <div className="muted">（无）</div>;
@@ -127,7 +117,7 @@ export default function TrafficDetail({ event, onCaptureToRule, onCaptureToMapLo
       <h4>响应头</h4>
       <HeaderTable headers={event.responseHeaders} />
       <h4>响应体</h4>
-      <pre>{pretty(event.responseBody) || '（无）'}</pre>
+      <ResponseBodyViews body={event.responseBody} eventId={event.id} />
     </div>
   );
 }
