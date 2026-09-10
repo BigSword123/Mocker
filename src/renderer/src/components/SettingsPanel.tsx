@@ -11,14 +11,12 @@ import { api } from '../lib/api';
 
 export default function SettingsPanel() {
   const [settings, setSettings] = useState<Settings | null>(null);
-  const [systemProxy, setSystemProxy] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [certCmds, setCertCmds] = useState<CertInstallCommands | null>(null);
 
   useEffect(() => {
     api.settingsGet().then(setSettings).catch(() => {});
-    api.systemProxyStatus().then(setSystemProxy).catch(() => setSystemProxy(false));
     api.certInstallCommands().then(setCertCmds).catch(() => {});
   }, []);
 
@@ -35,29 +33,13 @@ export default function SettingsPanel() {
         setMessage('代理端口必须是 1-65535 的整数');
         return;
       }
-      const next = await api.settingsSet(patch);
-      setSettings(next);
-      // 端口或模式变更后重启代理使其生效
-      await api.proxyStop();
-      await api.proxyStart();
-      if (systemProxy) {
-        await api.systemProxySet(true);
-      }
+      setSettings(await api.settingsApply(patch));
       setMessage('已保存，代理已重启生效');
       setTimeout(() => setMessage(''), 3000);
     } catch (err) {
       setMessage(String(err));
     } finally {
       setSaving(false);
-    }
-  };
-
-  const toggleSystemProxy = async () => {
-    try {
-      await api.systemProxySet(!systemProxy);
-      setSystemProxy(!systemProxy);
-    } catch (err) {
-      setMessage(String(err));
     }
   };
 
@@ -121,12 +103,18 @@ export default function SettingsPanel() {
             setSettings({ ...settings, whitelist: e.target.value.split('\n').map((s) => s.trim()).filter(Boolean) })
           }
         />
-        <label>启动时自动开代理</label>
+        <label>启动时自动恢复</label>
         <input
+          data-testid="autostart-proxy"
           type="checkbox"
           checked={settings.autoStartProxy}
           onChange={(e) => setSettings({ ...settings, autoStartProxy: e.target.checked })}
         />
+        <label />
+        <div className="form-note">
+          勾选后启动时会自动开启代理服务，并恢复上次的「电脑 / 手机」监控模式；取消勾选则两者都不恢复。
+          需点「保存并重启代理」才写入，下次启动生效。
+        </div>
         <label>上游代理</label>
         <input
           placeholder="留空不走上游；http:// socks5:// pac+http://"
@@ -140,13 +128,15 @@ export default function SettingsPanel() {
           onChange={(e) => setSettings({ ...settings, upstreamNoProxy: e.target.value })}
         />
         <label>系统代理</label>
-        <div>
-          <button onClick={toggleSystemProxy}>{systemProxy ? '关闭系统代理' : '开启系统代理'}</button>
+        <div className="form-note" data-testid="system-proxy-hint">
+          由窗口底部状态栏的「关 / 手机 / 电脑」统一控制，此处不再单独设置。
+          选「电脑」会自动启动代理、接管系统代理，并在下次启动时恢复；退出应用时自动还原。
         </div>
       </div>
       <div className="toolbar">
         <button
           className="primary"
+          data-testid="settings-save"
           disabled={saving}
           onClick={() =>
             save({
@@ -161,7 +151,11 @@ export default function SettingsPanel() {
         >
           保存并重启代理
         </button>
-        {message && <span className="muted">{message}</span>}
+        {message && (
+          <span className="muted" data-testid="settings-message">
+            {message}
+          </span>
+        )}
       </div>
       <div className="cert-section">
         <h3>弱网限速</h3>
