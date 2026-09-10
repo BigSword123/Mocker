@@ -18,7 +18,6 @@ const api: Api = {
   settingsApply: (patch: Partial<Settings>) => ipcRenderer.invoke('settings:apply', patch),
   certInfo: () => ipcRenderer.invoke('cert:info'),
   certInstallCommands: () => ipcRenderer.invoke('cert:install-commands'),
-  systemProxySet: (enabled: boolean) => ipcRenderer.invoke('system-proxy:set', enabled),
   systemProxyStatus: () => ipcRenderer.invoke('system-proxy:status'),
   monitorSetMode: (mode: MonitorMode) => ipcRenderer.invoke('monitor:set-mode', mode),
   appPlatform: () => ipcRenderer.invoke('app:platform'),

@@ -20,7 +20,6 @@ export interface Api {
   settingsApply(patch: Partial<Settings>): Promise<Settings>;
   certInfo(): Promise<CertInfo>;
   certInstallCommands(): Promise<CertInstallCommands>;
-  systemProxySet(enabled: boolean): Promise<void>;
   systemProxyStatus(): Promise<boolean>;
   monitorSetMode(mode: MonitorMode): Promise<{ mode: MonitorMode; notice?: string }>;
   appPlatform(): Promise<'macos' | 'windows' | 'other'>;

@@ -147,16 +147,6 @@ export function registerIpc(ctx: IpcContext): void {
   ipcMain.handle('cert:info', () => ({ expiresAt: ctx.ca.notAfter.getTime() }));
   ipcMain.handle('cert:install-commands', () => buildCertInstallCommands(ctx.dataDir));
 
-  ipcMain.handle('system-proxy:set', async (_e, enabled: boolean) => {
-    if (enabled && !ctx.proxy.running) throw new Error('请先启动代理服务');
-    if (enabled) {
-      await enableSystemProxy(ctx.proxy.port);
-    } else {
-      await disableSystemProxy();
-    }
-    ctx.onSystemProxyChanged(enabled);
-  });
-
   ipcMain.handle('monitor:set-mode', async (_e, mode: MonitorMode) => {
     return applyMonitorMode(mode, {
       proxyRunning: () => ctx.proxy.running,
