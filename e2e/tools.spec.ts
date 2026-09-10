@@ -16,6 +16,29 @@ test.afterAll(async () => {
   await app.close();
 });
 
+/** 用渲染进程 canvas 造真实图片，支持 png 与 jpeg；会自动建父目录 */
+async function makeImage(
+  win: Page,
+  absPath: string,
+  size: number,
+  color: string,
+  type: 'image/png' | 'image/jpeg',
+) {
+  await fs.mkdir(path.dirname(absPath), { recursive: true });
+  const bytes = await win.evaluate(
+    async ([s, c, t]) => {
+      const canvas = new OffscreenCanvas(s, s);
+      const ctx = canvas.getContext('2d')!;
+      ctx.fillStyle = c;
+      ctx.fillRect(0, 0, s, s);
+      const blob = await canvas.convertToBlob({ type: t, quality: 0.9 });
+      return Array.from(new Uint8Array(await blob.arrayBuffer()));
+    },
+    [size, color, type] as [number, string, 'image/png' | 'image/jpeg'],
+  );
+  await fs.writeFile(absPath, Uint8Array.from(bytes));
+}
+
 test('实用工具 tab 位于设备接入左侧', async () => {
   await win.waitForSelector('[data-testid="tools-tab"]');
   const order = await win.$$eval('.tabs button', (btns) => btns.map((b) => b.getAttribute('data-testid')));
@@ -158,4 +181,108 @@ test('gzip 工具：未选文件时两个操作按钮禁用', async () => {
   await expect(win.getByTestId('gzip-decompress')).toBeDisabled();
   // toHaveText 对 <input> 恒真（textContent 总是空串），必须断言 value
   await expect(win.getByTestId('gzip-path')).toHaveValue('');
+});
+
+test('WebP：真实 png/jpg 经完整 IPC 链路产出合法产物', async () => {
+  const src = await fs.mkdtemp(path.join(os.tmpdir(), 'mocker-webp-src-'));
+  const out = await fs.mkdtemp(path.join(os.tmpdir(), 'mocker-webp-out-'));
+  try {
+    await makeImage(win, path.join(src, 'nested/red.png'), 8, '#ff0000', 'image/png');
+    // 必须是真 JPEG：encodeWebp 靠魔数而非扩展名判断，拿 PNG 改名会漏掉 0xff 0xd8 0xff 分支
+    await makeImage(win, path.join(src, 'blue.jpg'), 8, '#0000ff', 'image/jpeg');
+
+    const scanned = await win.evaluate(async (d) => window.api.scanImages(d), src);
+    expect(scanned.map((f) => f.relPath).sort()).toEqual(['blue.jpg', 'nested/red.png']);
+    expect(scanned.map((f) => f.outName).sort()).toEqual(['blue.webp', 'nested/red.webp']);
+
+    const rows = await win.evaluate(
+      async ([srcDir, outDir, files, quality]) => {
+        // canvas 编码就地内联：e2e 跑的是构建产物，渲染进程里没有源码模块可 import
+        const done: { relPath: string; ok: boolean; inputBytes: number; outputBytes: number; error?: string }[] = [];
+        for (const f of files) {
+          try {
+            const bytes = await window.api.readImage(srcDir, f.relPath);
+            const mime = f.ext === '.png' ? 'image/png' : 'image/jpeg';
+            const bmp = await createImageBitmap(new Blob([new Uint8Array(bytes)], { type: mime }));
+            const c = new OffscreenCanvas(bmp.width, bmp.height);
+            c.getContext('2d')!.drawImage(bmp, 0, 0);
+            const blob = await c.convertToBlob({ type: 'image/webp', quality });
+            bmp.close();
+            const w = await window.api.writeWebp(outDir, f.outName, new Uint8Array(await blob.arrayBuffer()));
+            done.push({ relPath: f.relPath, ok: true, inputBytes: f.size, outputBytes: w.bytes });
+          } catch (e) {
+            done.push({ relPath: f.relPath, ok: false, inputBytes: f.size, outputBytes: 0, error: e instanceof Error ? e.message : String(e) });
+          }
+        }
+        return done;
+      },
+      [src, out, scanned, 0.8] as [string, string, typeof scanned, number],
+    );
+    expect(rows.filter((r) => !r.ok)).toEqual([]);
+    expect(rows.map((r) => r.relPath).sort()).toEqual(['blue.jpg', 'nested/red.png']);
+
+    for (const r of rows) {
+      const rel = r.relPath.replace(/\.(png|jpg)$/, '.webp');
+      const buf = await fs.readFile(path.join(out, rel));
+      expect(buf.subarray(0, 4).toString('ascii'), rel).toBe('RIFF');
+      expect(buf.subarray(8, 12).toString('ascii'), rel).toBe('WEBP');
+      expect(buf.length, rel).toBe(r.outputBytes);
+    }
+  } finally {
+    await fs.rm(src, { recursive: true, force: true });
+    await fs.rm(out, { recursive: true, force: true });
+  }
+});
+
+test('WebP：质量参数真的传到了编码器', async () => {
+  const src = await fs.mkdtemp(path.join(os.tmpdir(), 'mocker-webp-q-'));
+  try {
+    // 纯色块在任何质量下都编成一样的几十字节，测不出差异，必须用噪声
+    const noise = await win.evaluate(async () => {
+      const c = new OffscreenCanvas(64, 64);
+      const ctx = c.getContext('2d')!;
+      const img = ctx.createImageData(64, 64);
+      for (let i = 0; i < img.data.length; i += 4) {
+        img.data[i] = (i * 37) % 256;
+        img.data[i + 1] = (i * 91) % 256;
+        img.data[i + 2] = (i * 53) % 256;
+        img.data[i + 3] = 255;
+      }
+      ctx.putImageData(img, 0, 0);
+      const blob = await c.convertToBlob({ type: 'image/png' });
+      return Array.from(new Uint8Array(await blob.arrayBuffer()));
+    });
+    await fs.writeFile(path.join(src, 'noise.png'), Uint8Array.from(noise));
+
+    const encode = async (quality: number) =>
+      win.evaluate(
+        async ([d, q]) => {
+          const bytes = await window.api.readImage(d, 'noise.png');
+          const bmp = await createImageBitmap(new Blob([new Uint8Array(bytes)], { type: 'image/png' }));
+          const c = new OffscreenCanvas(bmp.width, bmp.height);
+          c.getContext('2d')!.drawImage(bmp, 0, 0);
+          const blob = await c.convertToBlob({ type: 'image/webp', quality: q });
+          bmp.close();
+          return (await blob.arrayBuffer()).byteLength;
+        },
+        [src, quality] as [string, number],
+      );
+
+    const lo = await encode(0.05);
+    const hi = await encode(0.95);
+    // quality 漏传时 convertToBlob 会用默认值，两次结果相等，这条断言就是拦这个的
+    expect(lo).toBeLessThan(hi);
+  } finally {
+    await fs.rm(src, { recursive: true, force: true });
+  }
+});
+
+test('WebP UI：未选目录时开始按钮禁用，质量默认 80', async () => {
+  await win.getByTestId('tools-tab').click();
+  await win.getByTestId('tool-tab-webp').click();
+
+  await expect(win.getByTestId('webp-start')).toBeDisabled();
+  await expect(win.getByTestId('webp-src')).toHaveValue('');
+  await expect(win.getByTestId('webp-out')).toHaveValue('');
+  await expect(win.getByTestId('webp-quality')).toHaveValue('80');
 });

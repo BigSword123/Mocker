@@ -1882,7 +1882,7 @@ message -> name -> String(e) 回退，因为 DecompressionStream 类错误
 - Modify: `src/renderer/src/components/ToolsPanel.tsx`
 - Test: `e2e/tools.spec.ts`（追加）
 
-- [ ] **Step 1: 写失败的 e2e（真实产物校验）**
+- [x] **Step 1: 写失败的 e2e（真实产物校验）**
 
 在 `e2e/tools.spec.ts` 末尾追加。这条测试是零依赖方案的核心安全网——它验证真实 png 经完整 IPC 链路后产出合法 WebP：
 
@@ -1952,12 +1952,12 @@ test('WebP UI：未选目录时开始按钮禁用，选定后显示扫描数量'
 });
 ```
 
-- [ ] **Step 2: 跑 e2e 确认失败**
+- [x] **Step 2: 跑 e2e 确认失败**
 
 Run: `npx playwright test e2e/tools.spec.ts -g "WebP"`
 Expected: FAIL — `tool-tab-webp` 找不到（链路那条可能已通过，因为 Task 5 已接完 IPC）
 
-- [ ] **Step 3: 建 WebpTool.tsx**
+- [x] **Step 3: 建 WebpTool.tsx**
 
 创建 `src/renderer/src/components/WebpTool.tsx`：
 
@@ -2155,7 +2155,7 @@ export default function WebpTool() {
 }
 ```
 
-- [ ] **Step 4: ToolsPanel 挂上 webp**
+- [x] **Step 4: ToolsPanel 挂上 webp**
 
 `src/renderer/src/components/ToolsPanel.tsx`：
 
@@ -2183,17 +2183,17 @@ const TOOLS: { key: ToolKey; label: string }[] = [
       {tool === 'webp' && <WebpTool />}
 ```
 
-- [ ] **Step 5: 跑 typecheck**
+- [x] **Step 5: 跑 typecheck**
 
 Run: `npm run typecheck`
 Expected: 无报错
 
-- [ ] **Step 6: 跑 e2e 确认通过**
+- [x] **Step 6: 跑 e2e 确认通过**
 
 Run: `npm run test:e2e -- e2e/tools.spec.ts`
 Expected: PASS，13 个 test 全绿
 
-- [ ] **Step 7: 跑全量单测与全量 e2e**
+- [x] **Step 7: 跑全量单测与全量 e2e**
 
 Run: `npm test && npm run test:e2e`
 Expected: PASS
@@ -2215,7 +2215,7 @@ Run: `npm run dev`
 
 确认后关掉 dev。
 
-- [ ] **Step 9: 提交**
+- [x] **Step 9: 提交**
 
 ```bash
 git status --short

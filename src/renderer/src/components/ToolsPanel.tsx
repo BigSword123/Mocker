@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import TimestampTool from './TimestampTool';
 import GzipTool from './GzipTool';
+import WebpTool from './WebpTool';
 
-type ToolKey = 'timestamp' | 'gzip';
+type ToolKey = 'timestamp' | 'gzip' | 'webp';
 
 const TOOLS: { key: ToolKey; label: string }[] = [
   { key: 'timestamp', label: '时间戳' },
   { key: 'gzip', label: 'gzip' },
+  { key: 'webp', label: '图片转 WebP' },
 ];
 
 export default function ToolsPanel() {
@@ -28,6 +30,7 @@ export default function ToolsPanel() {
       </div>
       {tool === 'timestamp' && <TimestampTool />}
       {tool === 'gzip' && <GzipTool />}
+      {tool === 'webp' && <WebpTool />}
     </div>
   );
 }
