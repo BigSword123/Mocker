@@ -60,8 +60,7 @@ export interface CompressResult {
   rawBytes: number;      // 原文 UTF-8 字节数
   gzippedBytes: number;  // gzip 后字节数
   ratio: number;         // gzippedBytes / rawBytes，rawBytes 为 0 时取 0
-  hex: string;           // 完整 hex dump（不截断）
-  base64: string;        // 完整 base64（不折行）
+  bytes: Uint8Array;     // gzip 后的完整字节
 }
 
 export function sniffGzip(body: string): GzipSniffResult;
@@ -101,7 +100,7 @@ export function toBase64(bytes: Uint8Array): string;
 - 每行 16 字节，格式 `OOOOOOOO  HH HH HH HH HH HH HH HH  HH HH HH HH HH HH HH  |AAAAAAAAAAAAAAAA|`
   - `OOOOOOOO`：8 位小写十六进制偏移
   - 前 8 字节与后 8 字节之间两个空格分隔
-  - 末行不足 16 字节时，hex 区按原位数留空对齐（缺失位置补两个空格）
+  - 末行不足 16 字节时，hex 区按 16 个槽位补齐（缺失位置补两个空格），因此 `|` 所在列在所有行中对齐；ASCII 侧栏**不补齐**，末行侧栏字符数等于该行实际字节数（即末行总长比满行短，差值为缺失字节数）
   - ASCII 侧栏：`0x20`–`0x7e` 原样输出，其余输出 `.`
 - `maxBytes` 给定时只渲染前 `maxBytes` 字节，并在末尾追加一行 `…（已截断，仅显示前 N 字节）`；不给定则输出完整内容
 - 空字节数组 → 返回空串
@@ -109,7 +108,7 @@ export function toBase64(bytes: Uint8Array): string;
 ### 4.5 base64 与压缩
 
 - `toBase64(bytes)`：分块（每块 ≤ 8192 字节）调用 `String.fromCharCode` 后 `btoa`，避免大输入触发实参数量上限爆栈
-- `gzipCompress(text)`：`TextEncoder().encode(text)` → `CompressionStream('gzip')` → 收集字节 → 计算 `rawBytes` / `gzippedBytes` / `ratio` 并生成完整 `hex` 与 `base64`
+- `gzipCompress(text)`：`TextEncoder().encode(text)` → `CompressionStream('gzip')` → 收集字节，返回 `rawBytes` / `gzippedBytes` / `ratio` / `bytes`。**不预生成 hex 与 base64 字符串**：渲染需要截断版、复制需要完整版，两者长度不同，且多 MB 字符串常驻组件 state 没有收益，因此由视图层在渲染与点击复制时分别调用 `toHexDump(result.bytes, 4096)` / `toHexDump(result.bytes)` / `toBase64(result.bytes)`
 - `gunzipText(bytes)`：`DecompressionStream('gzip')` → 收集字节 → `TextDecoder('utf-8', { fatal: true })` 转文本。`fatal: true` 保证非法 UTF-8 抛错而非静默产生替换字符
 
 ## 5. UI 结构
@@ -163,6 +162,8 @@ export function toBase64(bytes: Uint8Array): string;
 | clipboard 写入被拒 | 沿用现有 try/catch，按钮不进入「已复制」态，无额外提示 |
 
 计算过程中的异常一律捕获后落到对应 tab 的错误行，不允许抛到渲染流程导致详情区白屏。
+
+错误信息取值规则：`DecompressionStream` 解压失败抛出的是 **`message` 为空字符串的 `TypeError`**（已实测），因此 `{message}` 需按 `e.message` → `e.name` → `String(e)` 顺序回退，否则错误行会渲染成「gzip 解压失败：」后面一片空白。
 
 ## 8. 回归面
 
