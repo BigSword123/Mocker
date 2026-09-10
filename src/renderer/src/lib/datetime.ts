@@ -70,7 +70,8 @@ function zoneOffsetSeconds(ms: number, timeZone: string): number {
   return Math.round((asUtc - Math.floor(ms / 1000) * 1000) / 1000);
 }
 
-function offsetToIso(offSec: number): string {
+/** 形如 `+08:00`；LMT 时区带秒，如 `+08:05:43` */
+export function offsetToIso(offSec: number): string {
   const sign = offSec < 0 ? '-' : '+';
   const a = Math.abs(offSec);
   const ss = a % 60;
