@@ -555,3 +555,8 @@ table.kv .k { color: #8ab4ff; width: 200px; }
   color: #8a8b96;
   margin: 4px 0;
 }
+.body-view pre.body-hex {
+  white-space: pre;
+  word-break: normal;
+  overflow-x: auto;
+}

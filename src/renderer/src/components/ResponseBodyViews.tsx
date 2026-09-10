@@ -150,7 +150,7 @@ export default function ResponseBodyViews({ body, eventId }: Props) {
           原始 {r.rawBytes.toLocaleString('en-US')} B → gzip {r.gzippedBytes.toLocaleString('en-US')} B（
           {(r.ratio * 100).toFixed(1)}%）
         </div>
-        <pre data-testid="body-view-content">{toHexDump(r.bytes, HEX_RENDER_LIMIT)}</pre>
+        <pre className="body-hex" data-testid="body-view-content">{toHexDump(r.bytes, HEX_RENDER_LIMIT)}</pre>
       </>
     );
   } else if (gzipCalc.status === 'error') {
