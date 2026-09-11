@@ -14,11 +14,12 @@ import type { SettingsStore } from './storage/settings-store';
 import { disableSystemProxy, enableSystemProxy, systemProxyEnabled } from './system-proxy';
 import type { CaMaterial } from './certs/ca';
 import { buildCertInstallCommands } from './certs/install-commands';
-import type { RenderContext, ReplayRequest, RuleAction, RuleInput, RulePatch, Settings, TrafficEvent, MapLocalSaveInput, MonitorMode, GzipMode } from '../shared/types';
+import type { RenderContext, ReplayRequest, RuleAction, RuleInput, RulePatch, Settings, TrafficEvent, MapLocalSaveInput, MonitorMode, GzipMode, BodyWindowPayload } from '../shared/types';
 import type { OpenDialogOptions, SaveDialogOptions } from 'electron';
 import { AdbService } from './adb/adb-service';
 import { applyMonitorMode } from './monitor-mode';
 import { applySettings } from './apply-settings';
+import { BodyWindowStore } from './body-window';
 import { validateUpstreamProxyUrl } from '../shared/upstream';
 import { validateAction } from './rules/validate';
 import { assertValidThrottle } from './proxy/throttle';
@@ -40,6 +41,8 @@ export interface IpcContext {
   systemProxySetByUs: () => boolean;
   onSystemProxyChanged: (enabled: boolean) => void;
   replay: ReplayService;
+  /** 按 token 弹出查看窗口。mainWindow 在 index.ts 里，弹窗要挂成它的子窗口 */
+  createBodyWindow: (token: string) => void;
 }
 
 export function localIps(): string[] {
@@ -292,6 +295,14 @@ export function registerIpc(ctx: IpcContext): void {
   ipcMain.handle('rules:reset-sequence', (_e, ruleId: string) => {
     ctx.proxy.resetSequenceCounter(ruleId);
   });
+
+  const bodyWindows = new BodyWindowStore();
+  ipcMain.handle('body-window:open', (_e, payload: BodyWindowPayload) => {
+    const token = bodyWindows.put(payload);
+    ctx.createBodyWindow(token);
+    return token;
+  });
+  ipcMain.handle('body-window:take', (_e, token: string) => bodyWindows.take(token));
 }
 
 async function showSaveDialog(opts: SaveDialogOptions) {

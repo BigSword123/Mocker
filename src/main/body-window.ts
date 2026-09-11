@@ -1,12 +1,7 @@
 import { randomUUID } from 'node:crypto';
+import type { BodyWindowPayload } from '../shared/types';
 
-export interface BodyWindowPayload {
-  eventId: string;
-  method: string;
-  url: string;
-  status?: number;
-  body: string;
-}
+export type { BodyWindowPayload };
 
 /** 弹窗加载完就会来取；超过这个时间没取说明窗口没开起来，不能一直占着这份 body。 */
 export const BODY_WINDOW_TTL_MS = 60_000;

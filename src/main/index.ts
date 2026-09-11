@@ -44,6 +44,37 @@ function createWindow(): void {
   }
 }
 
+/**
+ * 响应体查看弹窗。必须挂成主窗口的子窗口：本仓库没有注册 window-all-closed，
+ * Electron 默认所有窗口关闭即退出，一个独立弹窗会在主窗口关掉后变成孤儿，
+ * 而且没有任何途径把主窗口唤回来。
+ */
+function createBodyWindow(token: string): void {
+  const win = new BrowserWindow({
+    width: 1000,
+    height: 720,
+    parent: mainWindow ?? undefined,
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//.test(url)) {
+      shell.openExternal(url);
+    }
+    return { action: 'deny' };
+  });
+  const devServer = process.env['ELECTRON_RENDERER_URL'];
+  if (devServer) {
+    win.loadURL(`${devServer}?body=${encodeURIComponent(token)}`);
+  } else {
+    win.loadFile(join(__dirname, '../renderer/index.html'), { query: { body: token } });
+  }
+}
+
 async function bootstrap(): Promise<void> {
   const dataDir = app.getPath('userData');
 
@@ -106,6 +137,7 @@ async function bootstrap(): Promise<void> {
       systemProxySetByUs = enabled;
     },
     replay,
+    createBodyWindow,
   });
 
   if (settings.get().autoStartProxy) {

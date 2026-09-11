@@ -1,4 +1,4 @@
-import type { AdbOpResult, AdbStatus, CertInfo, CertInstallCommands, GzipFileResult, GzipMode, MapLocalSaveInput, MockRule, MonitorMode, ProxyStatus, RedirectRule, RenderContext, ReplayRequest, RuleAction, RuleInput, RulePatch, ScannedImage, Scenario, Settings, TrafficEvent, WebpWriteResult } from './types';
+import type { AdbOpResult, AdbStatus, BodyWindowPayload, CertInfo, CertInstallCommands, GzipFileResult, GzipMode, MapLocalSaveInput, MockRule, MonitorMode, ProxyStatus, RedirectRule, RenderContext, ReplayRequest, RuleAction, RuleInput, RulePatch, ScannedImage, Scenario, Settings, TrafficEvent, WebpWriteResult } from './types';
 
 export interface Api {
   proxyStart(): Promise<void>;
@@ -49,6 +49,10 @@ export interface Api {
   adbSetupTunnel(): Promise<AdbOpResult>;
   adbSetPhoneProxy(): Promise<AdbOpResult>;
   adbClearPhoneProxy(): Promise<AdbOpResult>;
+  /** 把响应体交给主进程并弹出查看窗口，返回该窗口的一次性 token */
+  bodyWindowOpen(payload: BodyWindowPayload): Promise<string>;
+  /** 弹窗自己按 token 取走 payload；取过即失效，过期或不存在返回 null */
+  bodyWindowTake(token: string): Promise<BodyWindowPayload | null>;
 }
 
 declare global {
