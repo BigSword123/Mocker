@@ -1,10 +1,13 @@
 import { describe, expect, test } from 'vitest';
 import {
+  AUTO_OPEN_MAX_DEPTH,
+  AUTO_OPEN_MAX_ENTRIES,
   coerceValue,
   kindOf,
   removeIn,
   renameIn,
   setIn,
+  shouldAutoOpen,
 } from '../src/renderer/src/lib/json-tree';
 
 describe('kindOf', () => {
@@ -83,5 +86,33 @@ describe('renameIn', () => {
   test('ignores empty or identical next key', () => {
     expect(renameIn({ a: 1 }, [], 'a', '')).toEqual({ a: 1 });
     expect(renameIn({ a: 1 }, [], 'a', 'a')).toEqual({ a: 1 });
+  });
+});
+
+// depth 用 JsonTree 自己的编号：根节点是 1，它的子节点是 2，依此类推。
+describe('shouldAutoOpen', () => {
+  test('opens a shallow, narrow container', () => {
+    expect(shouldAutoOpen(1, 5)).toBe(true);
+  });
+
+  test('depth limit is inclusive', () => {
+    expect(AUTO_OPEN_MAX_DEPTH).toBe(2);
+    expect(shouldAutoOpen(AUTO_OPEN_MAX_DEPTH, 1)).toBe(true);
+    expect(shouldAutoOpen(AUTO_OPEN_MAX_DEPTH + 1, 1)).toBe(false);
+  });
+
+  test('entry-count limit is inclusive', () => {
+    expect(AUTO_OPEN_MAX_ENTRIES).toBe(50);
+    expect(shouldAutoOpen(1, AUTO_OPEN_MAX_ENTRIES)).toBe(true);
+    expect(shouldAutoOpen(1, AUTO_OPEN_MAX_ENTRIES + 1)).toBe(false);
+  });
+
+  test('either limit on its own collapses the node', () => {
+    expect(shouldAutoOpen(1, 500)).toBe(false);
+    expect(shouldAutoOpen(9, 2)).toBe(false);
+  });
+
+  test('an empty container still counts as shallow and narrow', () => {
+    expect(shouldAutoOpen(1, 0)).toBe(true);
   });
 });

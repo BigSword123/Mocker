@@ -17,6 +17,11 @@ const KIND_OPTIONS: Array<{ value: JsonValueKind; label: string }> = [
   { value: 'array', label: '数组' },
 ];
 
+/** 默认全展开，与加 autoOpen 之前的行为逐字一致。 */
+const ALWAYS_OPEN = (): boolean => true;
+
+type AutoOpen = (depth: number, entryCount: number) => boolean;
+
 interface NodeName {
   type: 'key' | 'index';
   value: string;
@@ -29,6 +34,8 @@ interface NodeProps {
   onChange: (value: unknown) => void;
   onDelete?: () => void;
   onRename?: (nextKey: string) => void;
+  readOnly: boolean;
+  autoOpen: AutoOpen;
 }
 
 function NumberEditor({ value, onChange }: { value: number; onChange: (v: number) => void }) {
@@ -100,10 +107,26 @@ function ValueEditor({
   );
 }
 
-function JsonTreeNode({ value, depth, name, onChange, onDelete, onRename }: NodeProps) {
+/** 只读渲染：字符串加引号，免得和数字/布尔分不清。 */
+function ReadOnlyValue({ value }: { value: unknown }) {
+  const kind = kindOf(value);
+  if (kind === 'null') return <span className="json-tree-null">null</span>;
+  if (kind === 'string') return <span className="json-tree-ro">"{value as string}"</span>;
+  return <span className="json-tree-ro">{String(value)}</span>;
+}
+
+function JsonTreeNode({
+  value,
+  depth,
+  name,
+  onChange,
+  onDelete,
+  onRename,
+  readOnly,
+  autoOpen,
+}: NodeProps) {
   const kind = kindOf(value);
   const isContainer = kind === 'object' || kind === 'array';
-  const [open, setOpen] = useState(true);
   const colorClass = `json-d${depth % 6}`;
 
   const entries = isContainer
@@ -111,6 +134,8 @@ function JsonTreeNode({ value, depth, name, onChange, onDelete, onRename }: Node
       ? Object.entries(value as Record<string, unknown>)
       : (value as unknown[]).map((v, i) => [String(i), v] as const)
     : [];
+
+  const [open, setOpen] = useState(() => autoOpen(depth, entries.length));
 
   const addChild = () => {
     if (kind === 'object') onChange(setIn(value, [''], ''));
@@ -132,15 +157,18 @@ function JsonTreeNode({ value, depth, name, onChange, onDelete, onRename }: Node
         ) : (
           <span className="json-tree-toggle-space" />
         )}
-        {name?.type === 'key' && (
-          <input
-            type="text"
-            className={`json-tree-key ${colorClass}`}
-            value={name.value}
-            aria-label="属性名"
-            onChange={(e) => onRename?.(e.target.value)}
-          />
-        )}
+        {name?.type === 'key' &&
+          (readOnly ? (
+            <span className={`json-tree-key ${colorClass}`}>{name.value}</span>
+          ) : (
+            <input
+              type="text"
+              className={`json-tree-key ${colorClass}`}
+              value={name.value}
+              aria-label="属性名"
+              onChange={(e) => onRename?.(e.target.value)}
+            />
+          ))}
         {name?.type === 'index' && (
           <span className="json-tree-index">{name.value}</span>
         )}
@@ -151,14 +179,18 @@ function JsonTreeNode({ value, depth, name, onChange, onDelete, onRename }: Node
               {kind === 'object' ? '{ }' : '[ ]'}
             </span>
             <span className="json-tree-meta muted">{entries.length} 项</span>
-            <button type="button" className="json-tree-add" onClick={addChild}>
-              +{kind === 'object' ? '属性' : '元素'}
-            </button>
+            {!readOnly && (
+              <button type="button" className="json-tree-add" onClick={addChild}>
+                +{kind === 'object' ? '属性' : '元素'}
+              </button>
+            )}
           </>
+        ) : readOnly ? (
+          <ReadOnlyValue value={value} />
         ) : (
           <ValueEditor value={value} onChange={onChange} />
         )}
-        {onDelete && (
+        {!readOnly && onDelete && (
           <button
             type="button"
             className="json-tree-del"
@@ -177,12 +209,18 @@ function JsonTreeNode({ value, depth, name, onChange, onDelete, onRename }: Node
               value={child}
               depth={depth + 1}
               name={kind === 'object' ? { type: 'key', value: key } : { type: 'index', value: key }}
+              readOnly={readOnly}
+              autoOpen={autoOpen}
               onChange={(nv) => onChange(setIn(value, kind === 'object' ? [key] : [Number(key)], nv))}
-              onDelete={() =>
-                onChange(removeIn(value, kind === 'object' ? [key] : [Number(key)]))
+              onDelete={
+                readOnly
+                  ? undefined
+                  : () => onChange(removeIn(value, kind === 'object' ? [key] : [Number(key)]))
               }
               onRename={
-                kind === 'object' ? (nextKey) => onChange(renameIn(value, [], key, nextKey)) : undefined
+                !readOnly && kind === 'object'
+                  ? (nextKey) => onChange(renameIn(value, [], key, nextKey))
+                  : undefined
               }
             />
           ))}
@@ -194,9 +232,27 @@ function JsonTreeNode({ value, depth, name, onChange, onDelete, onRename }: Node
 
 interface Props {
   value: unknown;
+  /** 只读时不会被调用，但保持必填以免编辑场景漏传后静默失效 */
   onChange: (value: unknown) => void;
+  /** 隐藏增删改控件、值渲染成文本 */
+  readOnly?: boolean;
+  /** 初始展开判定，参数是 JsonTree 的 depth（根 = 1）与该容器的子项数 */
+  autoOpen?: AutoOpen;
 }
 
-export default function JsonTree({ value, onChange }: Props) {
-  return <JsonTreeNode value={value} depth={1} onChange={onChange} />;
+export default function JsonTree({
+  value,
+  onChange,
+  readOnly = false,
+  autoOpen = ALWAYS_OPEN,
+}: Props) {
+  return (
+    <JsonTreeNode
+      value={value}
+      depth={1}
+      onChange={onChange}
+      readOnly={readOnly}
+      autoOpen={autoOpen}
+    />
+  );
 }
