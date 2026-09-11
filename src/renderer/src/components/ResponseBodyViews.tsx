@@ -9,6 +9,7 @@ import {
   type CompressResult,
 } from '../lib/body-codec';
 import { pretty } from '../lib/body-format';
+import type { TrafficEvent } from '../../../shared/types';
 
 type BodyView = 'raw' | 'gunzip' | 'gzip';
 
@@ -31,9 +32,11 @@ function messageOf(e: unknown): string {
 interface Props {
   body: string | undefined;
   eventId: string;
+  /** 只给弹窗标题栏用；body 单独传是因为视图里还会被 gzip 解压结果替换 */
+  meta: Pick<TrafficEvent, 'method' | 'url' | 'status'>;
 }
 
-export default function ResponseBodyViews({ body, eventId }: Props) {
+export default function ResponseBodyViews({ body, eventId, meta }: Props) {
   const text = body ?? '';
   const [view, setView] = useState<BodyView>('raw');
   const [copied, setCopied] = useState<string | null>(null);
@@ -98,6 +101,17 @@ export default function ResponseBodyViews({ body, eventId }: Props) {
   };
   const label = (key: string, base: string) => (copied === key ? '已复制' : base);
   const tabClass = (v: BodyView) => (view === v ? 'tab active' : 'tab');
+
+  /** 交给主进程的是完整 body，不是 pretty() 截断过的显示文本。 */
+  const openWindow = async (): Promise<void> => {
+    await window.api.bodyWindowOpen({
+      eventId,
+      method: meta.method,
+      url: meta.url,
+      status: meta.status,
+      body: text,
+    });
+  };
 
   let actions: ReactNode = null;
   let content: ReactNode = null;
@@ -195,7 +209,18 @@ export default function ResponseBodyViews({ body, eventId }: Props) {
             gzip 压缩
           </button>
         </div>
-        <div className="body-view-actions">{actions}</div>
+        <div className="body-view-actions">
+          <button
+            type="button"
+            data-testid="body-open-window"
+            disabled={empty}
+            title="在独立窗口中查看完整响应体"
+            onClick={() => void openWindow()}
+          >
+            新窗口打开
+          </button>
+          {actions}
+        </div>
       </div>
       {content}
     </div>
