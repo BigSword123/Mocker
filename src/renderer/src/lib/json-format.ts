@@ -72,6 +72,23 @@ export function tokenizeJson(text: string): JsonToken[] {
   return tokens;
 }
 
+/**
+ * 把扁平 token 流按行切开，供虚拟滚动的文本视图逐行渲染。
+ * 行数与 token 总数无关，只取决于换行符个数；空行会保留成空数组而不是被丢掉。
+ */
+export function tokenizeLines(text: string): JsonToken[][] {
+  const lines: JsonToken[][] = [[]];
+  for (const token of tokenizeJson(text)) {
+    const parts = token.text.split('\n');
+    for (let i = 0; i < parts.length; i += 1) {
+      if (i > 0) lines.push([]);
+      const part = parts[i]!;
+      if (part.length > 0) lines[lines.length - 1]!.push({ ...token, text: part });
+    }
+  }
+  return lines;
+}
+
 export function formatJson(text: string): JsonFormatResult {
   if (!text.trim()) return { ok: false, error: '内容为空' };
   try {

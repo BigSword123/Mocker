@@ -117,7 +117,7 @@ export default function TrafficDetail({ event, onCaptureToRule, onCaptureToMapLo
       <h4>响应头</h4>
       <HeaderTable headers={event.responseHeaders} />
       <h4>响应体</h4>
-      <ResponseBodyViews body={event.responseBody} eventId={event.id} />
+      <ResponseBodyViews body={event.responseBody} eventId={event.id} meta={event} />
     </div>
   );
 }

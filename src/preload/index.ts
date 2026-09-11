@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { Api } from '../shared/api';
-import type { AdbOpResult, AdbStatus, GzipMode, MonitorMode, RedirectRule, RenderContext, ReplayRequest, RuleAction, RuleInput, RulePatch, Settings, TrafficEvent, MapLocalSaveInput } from '../shared/types';
+import type { AdbOpResult, AdbStatus, BodyWindowPayload, GzipMode, MonitorMode, RedirectRule, RenderContext, ReplayRequest, RuleAction, RuleInput, RulePatch, Settings, TrafficEvent, MapLocalSaveInput } from '../shared/types';
 
 const api: Api = {
   proxyStart: () => ipcRenderer.invoke('proxy:start'),
@@ -49,6 +49,8 @@ const api: Api = {
   adbSetupTunnel: () => ipcRenderer.invoke('adb:setup-tunnel'),
   adbSetPhoneProxy: () => ipcRenderer.invoke('adb:set-phone-proxy'),
   adbClearPhoneProxy: () => ipcRenderer.invoke('adb:clear-phone-proxy'),
+  bodyWindowOpen: (payload: BodyWindowPayload) => ipcRenderer.invoke('body-window:open', payload),
+  bodyWindowTake: (token: string) => ipcRenderer.invoke('body-window:take', token),
 };
 
 contextBridge.exposeInMainWorld('api', api);

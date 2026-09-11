@@ -560,3 +560,234 @@ table.kv .k { color: #8ab4ff; width: 200px; }
   word-break: normal;
   overflow-x: auto;
 }
+
+/* 响应体独立查看窗口 */
+.body-window {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: #1e1f24;
+}
+.body-window-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #33343c;
+}
+.body-window-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+}
+.body-window-method {
+  flex: 0 0 auto;
+  font-weight: 600;
+  color: #8ab4ff;
+}
+.body-window-status {
+  flex: 0 0 auto;
+  color: #38c172;
+}
+.body-window-url {
+  color: #8a8b96;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.body-window-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+.body-window-actions button {
+  font-size: 12px;
+  padding: 3px 10px;
+}
+.body-window-actions button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.body-window-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #c9cad4;
+}
+.body-window-size {
+  font-size: 12px;
+  color: #8a8b96;
+}
+.body-window-notice {
+  padding: 6px 12px;
+  font-size: 12px;
+  border-bottom: 1px solid #33343c;
+}
+.body-window-tabs {
+  align-items: center;
+  margin-bottom: 0;
+  padding: 8px 12px 0;
+  border-bottom: 1px solid #33343c;
+}
+.body-window-tabs .tab {
+  border-radius: 6px 6px 0 0;
+}
+.body-window-tabs .tab:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.body-window-hint {
+  margin-left: 8px;
+  font-size: 12px;
+}
+.body-window-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.body-window-error,
+.body-window-loading {
+  padding: 24px;
+}
+
+/* 主窗口里树视图限高 384px，弹窗里要占满 */
+.body-window .json-tree {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+}
+.json-tree-ro {
+  color: #e2e2e8;
+}
+
+/* 行高 18px 必须和 VirtualLines 的 LINE_HEIGHT 一致，虚拟滚动才定位得准 */
+.virtual-lines {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: #1e1f24;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+/* 不换行：一折行行高就不固定了。长行靠横向滚动看，行号用 sticky 钉住 */
+.virtual-line {
+  display: flex;
+  width: max-content;
+  min-width: 100%;
+  line-height: 18px;
+  white-space: pre;
+}
+.virtual-line-no {
+  position: sticky;
+  left: 0;
+  flex: 0 0 auto;
+  min-width: 52px;
+  padding: 0 10px 0 8px;
+  text-align: right;
+  color: #6b6c78;
+  background: #1e1f24;
+  user-select: none;
+}
+.virtual-line-text {
+  flex: 0 0 auto;
+  padding-right: 12px;
+  color: #e2e2e8;
+}
+
+/* 行高 24px 必须和 PathTable 的 ROW_HEIGHT 一致 */
+.path-table {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  font-size: 12px;
+}
+.path-table-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+}
+.path-table-search {
+  flex: 0 0 280px;
+  padding: 3px 8px;
+  font-size: 12px;
+}
+.path-table-count {
+  color: #8a8b96;
+}
+.path-table-truncated {
+  padding: 0 12px 6px;
+}
+.path-table-head,
+.path-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 2fr) 72px minmax(160px, 3fr) 68px;
+  align-items: center;
+  padding: 0 12px;
+}
+.path-table-head {
+  height: 24px;
+  background: #26272e;
+  border-top: 1px solid #33343c;
+  border-bottom: 1px solid #33343c;
+  color: #8a8b96;
+  font-weight: 600;
+}
+.path-table-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.path-row {
+  line-height: 24px;
+  border-bottom: 1px solid #2b2c34;
+}
+.path-row:hover {
+  background: #26272e;
+}
+.path-cell {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.path-cell-path {
+  color: #8ab4ff;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.path-cell-preview {
+  color: #c9cad4;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.path-cell-copy {
+  text-align: right;
+}
+.path-cell-copy button {
+  padding: 1px 8px;
+  font-size: 11px;
+}
+.kind-object,
+.kind-array {
+  color: #d2a8ff;
+}
+.kind-string {
+  color: #7ee787;
+}
+.kind-number {
+  color: #ffab70;
+}
+.kind-boolean {
+  color: #f692ce;
+}
+.kind-null {
+  color: #9b9ca6;
+}

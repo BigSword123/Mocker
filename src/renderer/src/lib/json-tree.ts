@@ -109,3 +109,15 @@ export function renameIn(
   };
   return rebuild(root, parentPath);
 }
+
+export const AUTO_OPEN_MAX_DEPTH = 2;
+export const AUTO_OPEN_MAX_ENTRIES = 50;
+
+/**
+ * 只读查看器的默认展开判定；depth 用 JsonTree 的编号（根节点是 1）。
+ * 深了或太宽就收起——几千字段的响应体全展开会一次渲染几万个 DOM 节点，
+ * 数据一条没少，但页面直接卡死。
+ */
+export function shouldAutoOpen(depth: number, entryCount: number): boolean {
+  return depth <= AUTO_OPEN_MAX_DEPTH && entryCount <= AUTO_OPEN_MAX_ENTRIES;
+}

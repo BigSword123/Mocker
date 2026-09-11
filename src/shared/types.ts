@@ -67,6 +67,15 @@ export interface TrafficEvent {
   throttledMs?: number;
 }
 
+/** 「新窗口打开」交给弹窗的响应体快照；弹窗按 token 一次性取走。 */
+export interface BodyWindowPayload {
+  eventId: string;
+  method: string;
+  url: string;
+  status?: number;
+  body: string;
+}
+
 export interface ReplayRequest {
   method: string;
   url: string;
